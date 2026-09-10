@@ -1,0 +1,36 @@
+added Hessian LMIs at 5 triangle types and P''>= 0.0002 at 4 distances
+added 21495 cutting-plane points from certificate_r5373.json on a 120/axis grid
+added 21644 dense local points near the touching types
+Traceback (most recent call last):
+  File "/Users/js4814/Documents/GitHub/MyComandCenter/Thomson/threepoint/gonogo4_r2.py", line 100, in <module>
+                                                         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-502/-Users-js4814-Documents-GitHub-MyComandCenter/0962e486-bbae-4fbd-bb57-0b9929536462/scratchpad/venv/lib/python3.14/site-packages/cvxpy/problems/problem.py", line 687, in solve
+    return solve_func(self, *args, **kwargs)
+  File "/private/tmp/claude-502/-Users-js4814-Documents-GitHub-MyComandCenter/0962e486-bbae-4fbd-bb57-0b9929536462/scratchpad/venv/lib/python3.14/site-packages/cvxpy/problems/problem.py", line 1148, in _solve
+    self.unpack_results(solution, solving_chain, inverse_data)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/claude-502/-Users-js4814-Documents-GitHub-MyComandCenter/0962e486-bbae-4fbd-bb57-0b9929536462/scratchpad/venv/lib/python3.14/site-packages/cvxpy/problems/problem.py", line 1453, in unpack_results
+    raise error.SolverError(
+    ...<2 lines>...
+            "information.")
+cvxpy.error.SolverError: Solver 'CLARABEL' failed. Try another solver, or solve with verbose=True for more information.
+=== verify 120/axis + local ===
+Traceback (most recent call last):
+  File "/Users/js4814/Documents/GitHub/MyComandCenter/Thomson/threepoint/verify_tight.py", line 5, in <module>
+    C=json.load(open(os.path.join(here,'certificate_numerical.json'))); T=json.load(open(os.path.join(here,sys.argv[1] if len(sys.argv)>1 else 'certificate_tight.json')))
+                                                                                    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/js4814/Documents/GitHub/MyComandCenter/Thomson/threepoint/certificate_r5373b.json'
+=== HP projection ===
+    Tc=json.load(open(os.path.join(here,sys.argv[1] if len(sys.argv)>1 else 'certificate_tight.json')))
+                 ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/js4814/Documents/GitHub/MyComandCenter/Thomson/threepoint/certificate_r5373b.json'
+=== Hessians ===
+Hessian of the triangle slack at each antiprism triangle type (eigenvalues):
+   ('-0.37182126', '0.31408937', '0.31408937'): T=1.95e-21  eig = ['0.000199438', '0.000580595', '0.0210092']   PD
+   ('-0.79910143', '-0.37182126', '0.17092269'): T=3.91e-21  eig = ['0.00020011', '0.000493974', '0.00824945']   PD
+   ('-0.79910143', '-0.79910143', '0.31408937'): T=1.95e-21  eig = ['0.000403656', '0.00876361', '0.0118959']   PD
+   ('-0.79910143', '0.17092269', '0.31408937'): T=3.91e-21  eig = ['0.000199141', '0.000799618', '0.00697301']   PD
+   ('0.17092269', '0.17092269', '0.31408937'): T=1.95e-21  eig = ['0.000260324', '0.00205234', '0.025108']   PD
+all five Hessians positive definite: True
+
+second derivative of the pair polynomial P(s) at the four distances (must be > 0):

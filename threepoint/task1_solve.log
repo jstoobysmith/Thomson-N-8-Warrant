@@ -1,0 +1,43 @@
+[    0.4s] minimal polynomial ready; A(u) leading coeffs 1 B deg 11
+[    0.4s] minpoly at u*: 0.0  check u^12 reduce consistency: 2.79e-47  y^2: 0.0
+[    0.4s] field arithmetic ready; testing inverse of y: 0.0
+[    0.5s] 29 rows, 119 unknowns loaded
+[    1.0s] numerical rank: 24 sv tail: [4.26e-02 5.50e-03 1.88e-15 4.40e-16]
+[    1.0s] pivot block cond: 4.562e+04
+[    1.0s] pivot unknowns: ['a0', 'lam', 'H0[0,2]', 'H0[0,7]', 'H0[1,3]', 'H0[2,4]', 'H0[5,7]', 'H1[0,0]', 'H1[0,1]', 'H1[0,2]', 'H1[2,3]', 'H2[0,0]', 'H2[0,1]', 'H2[1,1]', 'H2[1,2]', 'H2[3,5]', 'H3[0,0]', 'H3[0,1]', 'H3[0,3]', 'H4[0,0]', 'H4[0,1]', 'H4[0,2]', 'H5[0,0]', 'H5[0,1]']
+[    1.9s]   assembled row 1/24
+[   13.2s]   assembled row 2/24
+[   23.0s]   assembled row 3/24
+[   34.3s]   assembled row 4/24
+[   43.9s]   assembled row 5/24
+[   56.2s]   assembled row 6/24
+[   66.2s]   assembled row 7/24
+[   78.7s]   assembled row 8/24
+[   88.7s]   assembled row 9/24
+[   99.9s]   assembled row 10/24
+[  110.0s]   assembled row 11/24
+[  120.1s]   assembled row 12/24
+[  131.9s]   assembled row 13/24
+[  142.1s]   assembled row 14/24
+[  152.3s]   assembled row 15/24
+[  162.4s]   assembled row 16/24
+[  172.6s]   assembled row 17/24
+[  182.4s]   assembled row 18/24
+[  192.8s]   assembled row 19/24
+[  203.1s]   assembled row 20/24
+[  212.8s]   assembled row 21/24
+[  224.3s]   assembled row 22/24
+[  234.7s]   assembled row 23/24
+[  244.9s]   assembled row 24/24
+[  244.9s] solving the 4608 x 4608 rational system ...
+[  322.0s] solved
+[  327.3s] max residual of ALL rows at the exact solution: 2.907e-38
+[  327.4s] max |x_exact - x0| over pivots: 9.99e-6
+Traceback (most recent call last):
+  File "/Users/js4814/Documents/GitHub/MyComandCenter/Thomson/threepoint/task1_solve.py", line 59, in <module>
+    log("max coefficient height (digits) among pivots:",max(len(str(v.numerator))+len(str(v.denominator)) for p in cols for v in X[p].d.values()))
+                                                        ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/js4814/Documents/GitHub/MyComandCenter/Thomson/threepoint/task1_solve.py", line 59, in <genexpr>
+    log("max coefficient height (digits) among pivots:",max(len(str(v.numerator))+len(str(v.denominator)) for p in cols for v in X[p].d.values()))
+                                                                ~~~^^^^^^^^^^^^^
+ValueError: Exceeds the limit (4300 digits) for integer string conversion; use sys.set_int_max_str_digits() to increase the limit

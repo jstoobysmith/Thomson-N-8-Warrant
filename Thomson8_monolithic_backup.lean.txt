@@ -1,0 +1,2628 @@
+/-
+The N = 8 Thomson problem: formalisation skeleton.  See N8-Thomson-Blueprint.md.
+Compiles against Mathlib (Lean 4.33.0).  The `sorry`s are exactly the six **Tasks** in §16
+(`certData` and `certData_*`): the exact three-point certificate — numerically established
+(blueprint §12) — and its verification, each with a proof sketch, arranged so that Tasks 2–6 are
+independent once Task 1 has fixed the data.  Everything else is proved, including
+Bachoc–Vallentin three-point positivity for `S²` (`bv_positivity`), the three-point bound
+(`three_point_bound`), and `thomson_eight_lower` from the tasks.
+
+Standalone build: this directory is a Lake project (`lakefile.toml`); `lake exe cache get` once,
+then `lake build`.  Everything else is fully proved, including the
+rigorous lower bound `19.6475 < thomsonInf 8` (Yudin's linear-programming method at degree 12,
+§§12-13, with Schoenberg positivity for `P₁,…,P₄`, `P₇` and `P₁₂` proved from scratch), the
+covering-radius and separation estimates for a minimiser (§14), and the reduction of the open
+inequality to two named steps (`thomson_eight_lower_of`).  The remaining gap is `0.0278`,
+against `0.0275` that the linear-programming method can never close.
+-/
+import Mathlib
+
+namespace Thomson
+open Finset
+open scoped RealInnerProductSpace
+
+/-! ## 1. Definitions -/
+
+noncomputable def energy {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) : ℝ :=
+  ∑ i, ∑ j ∈ Finset.Ioi i, ‖x i - x j‖⁻¹
+def OnSphere {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) : Prop := ∀ i, ‖x i‖ = 1
+def Admissible {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) : Prop :=
+  OnSphere x ∧ Function.Injective x
+def Separated {n : ℕ} (δ : ℝ) (x : Fin n → EuclideanSpace ℝ (Fin 3)) : Prop :=
+  ∀ i j, i ≠ j → δ ≤ ‖x i - x j‖
+
+noncomputable def thomsonInf (n : ℕ) : ℝ :=
+  sInf (energy '' {x : Fin n → EuclideanSpace ℝ (Fin 3) | Admissible x})
+
+/-! ## 2. Elementary facts -/
+
+theorem energy_nonneg {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) : 0 ≤ energy x := by
+  apply Finset.sum_nonneg; intro i _; apply Finset.sum_nonneg; intro j _; positivity
+
+/-- The junk-value trap: a collapsed configuration has energy `0`, not `∞`. -/
+theorem energy_const {n : ℕ} (p : EuclideanSpace ℝ (Fin 3)) :
+    energy (fun _ : Fin n => p) = 0 := by simp [energy]
+
+theorem term_le_energy {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) {i j : Fin n}
+    (hlt : i < j) : ‖x i - x j‖⁻¹ ≤ energy x := by
+  have hnn : ∀ k : Fin n, k ∈ univ → 0 ≤ ∑ l ∈ Finset.Ioi k, ‖x k - x l‖⁻¹ := by
+    intro k _; apply Finset.sum_nonneg; intro l _; positivity
+  have inner : ‖x i - x j‖⁻¹ ≤ ∑ l ∈ Finset.Ioi i, ‖x i - x l‖⁻¹ :=
+    Finset.single_le_sum (f := fun l => ‖x i - x l‖⁻¹)
+      (fun l _ => inv_nonneg.mpr (norm_nonneg _)) (Finset.mem_Ioi.mpr hlt)
+  exact inner.trans (Finset.single_le_sum hnn (Finset.mem_univ i))
+
+theorem dist_ge_of_energy_le {n : ℕ} {x : Fin n → EuclideanSpace ℝ (Fin 3)} {M : ℝ}
+    (hinj : Function.Injective x) (hM : energy x ≤ M) {i j : Fin n} (hij : i ≠ j) :
+    M⁻¹ ≤ ‖x i - x j‖ := by
+  have key : ∀ a b : Fin n, a < b → M⁻¹ ≤ ‖x a - x b‖ := by
+    intro a b hab
+    have hne : x a ≠ x b := fun h => (ne_of_lt hab) (hinj h)
+    have hpos : 0 < ‖x a - x b‖ := by simpa [sub_eq_zero] using hne
+    have h1 : ‖x a - x b‖⁻¹ ≤ M := le_trans (term_le_energy x hab) hM
+    have hM0 : 0 < M := lt_of_lt_of_le (inv_pos.mpr hpos) h1
+    exact (inv_le_comm₀ hpos hM0).mp h1
+  rcases lt_or_gt_of_ne hij with h | h
+  · exact key i j h
+  · rw [← norm_sub_rev]; exact key j i h
+
+/-! ## 3. Explicit 3-vector arithmetic -/
+
+theorem sub_e3 (a b c d e f : ℝ) :
+    (!₂[a, b, c] : EuclideanSpace ℝ (Fin 3)) - !₂[d, e, f] = !₂[a - d, b - e, c - f] := by
+  ext i; fin_cases i <;> simp
+theorem norm_e3 (a b c : ℝ) :
+    ‖(!₂[a, b, c] : EuclideanSpace ℝ (Fin 3))‖ = Real.sqrt (a ^ 2 + b ^ 2 + c ^ 2) := by
+  rw [EuclideanSpace.norm_eq, Fin.sum_univ_three]
+  simp [Matrix.cons_val_two, Matrix.tail_cons]
+theorem e3_inj {a b c d e f : ℝ}
+    (h : (!₂[a, b, c] : EuclideanSpace ℝ (Fin 3)) = !₂[d, e, f]) : a = d ∧ b = e ∧ c = f := by
+  refine ⟨?_, ?_, ?_⟩
+  · have := congrArg (fun v : EuclideanSpace ℝ (Fin 3) => v.ofLp 0) h; simpa using this
+  · have := congrArg (fun v : EuclideanSpace ℝ (Fin 3) => v.ofLp 1) h; simpa using this
+  · have := congrArg (fun v : EuclideanSpace ℝ (Fin 3) => v.ofLp 2) h; simpa using this
+
+/-! ## 4. Existence of a minimiser -/
+
+/-- Explicit admissible configuration: points `(i/n, √(1-(i/n)²), 0)`. -/
+theorem exists_admissible (n : ℕ) :
+    ∃ x : Fin n → EuclideanSpace ℝ (Fin 3), Admissible x := by
+  refine ⟨fun i => !₂[(i : ℝ) / n, Real.sqrt (1 - ((i : ℝ) / n) ^ 2), 0], ?_, ?_⟩
+  · intro i
+    have hn : (0:ℝ) < n := by exact_mod_cast i.pos
+    have h0 : 0 ≤ (i : ℝ) / n := by positivity
+    have h1 : (i : ℝ) / n ≤ 1 := by
+      rw [div_le_one hn]; exact_mod_cast i.isLt.le
+    have hsq : ((i : ℝ) / n) ^ 2 ≤ 1 := pow_le_one₀ h0 h1
+    rw [norm_e3, Real.sq_sqrt (by linarith)]
+    norm_num
+  · intro i j h
+    have hn : (n : ℝ) ≠ 0 := by exact_mod_cast i.pos.ne'
+    have h0 := (e3_inj h).1
+    have : (i : ℝ) = j := by
+      have := congrArg (· * (n:ℝ)) h0
+      simpa [div_mul_cancel₀, hn] using this
+    exact Fin.ext (by exact_mod_cast this)
+
+theorem exists_minimiser (n : ℕ) (hn : 2 ≤ n) :
+    ∃ x : Fin n → EuclideanSpace ℝ (Fin 3), Admissible x ∧
+      ∀ y : Fin n → EuclideanSpace ℝ (Fin 3), Admissible y → energy x ≤ energy y := by
+  obtain ⟨x₀, hx₀⟩ := exists_admissible n
+  set M := energy x₀ with hM
+  have hMpos : 0 < M := by
+    have h01 : (⟨0, by omega⟩ : Fin n) < ⟨1, by omega⟩ := by simp [Fin.lt_def]
+    have hle := term_le_energy x₀ h01
+    have hne : x₀ ⟨0, by omega⟩ ≠ x₀ ⟨1, by omega⟩ := fun h => by
+      have := hx₀.2 h; simp [Fin.ext_iff] at this
+    have hpos : 0 < ‖x₀ ⟨0, by omega⟩ - x₀ ⟨1, by omega⟩‖ := by simpa [sub_eq_zero] using hne
+    exact lt_of_lt_of_le (inv_pos.mpr hpos) hle
+  have hMinv : 0 < M⁻¹ := inv_pos.mpr hMpos
+  let K : Set (Fin n → EuclideanSpace ℝ (Fin 3)) :=
+    {x | ∀ i, ‖x i‖ = 1} ∩ {x | ∀ i j, i ≠ j → M⁻¹ ≤ ‖x i - x j‖}
+  have hKsub : K ⊆ Set.univ.pi (fun _ => Metric.sphere (0 : EuclideanSpace ℝ (Fin 3)) 1) := by
+    intro x hx i _; simpa using hx.1 i
+  have hKclosed : IsClosed K := by
+    apply IsClosed.inter
+    · simp only [Set.setOf_forall]
+      exact isClosed_iInter fun i => isClosed_eq (by fun_prop) continuous_const
+    · simp only [Set.setOf_forall]
+      exact isClosed_iInter fun i => isClosed_iInter fun j => isClosed_iInter fun _ =>
+        isClosed_le continuous_const (by fun_prop)
+  have hK : IsCompact K :=
+    (isCompact_univ_pi fun _ => isCompact_sphere 0 1).of_isClosed_subset hKclosed hKsub
+  have hx₀K : x₀ ∈ K := ⟨hx₀.1, fun i j hij => dist_ge_of_energy_le hx₀.2 le_rfl hij⟩
+  have hcont : ContinuousOn energy K := by
+    unfold energy
+    apply continuousOn_finset_sum; intro i _
+    apply continuousOn_finset_sum; intro j hj
+    apply ContinuousOn.inv₀
+    · exact (by fun_prop : Continuous fun x : Fin n → EuclideanSpace ℝ (Fin 3) =>
+        ‖x i - x j‖).continuousOn
+    · intro x hx
+      have hij : i ≠ j := (Finset.mem_Ioi.mp hj).ne
+      have := hx.2 i j hij
+      linarith
+  obtain ⟨x, hxK, hxmin⟩ := hK.exists_isMinOn ⟨x₀, hx₀K⟩ hcont
+  refine ⟨x, ⟨hxK.1, ?_⟩, ?_⟩
+  · intro i j hij
+    by_contra hne
+    have := hxK.2 i j hne
+    rw [hij, sub_self, norm_zero] at this
+    linarith
+  · intro y hy
+    by_cases h : energy y ≤ M
+    · exact hxmin ⟨hy.1, fun i j hij => dist_ge_of_energy_le hy.2 h hij⟩
+    · push_neg at h
+      exact le_trans (hxmin hx₀K) h.le
+
+/-! ## 5. The cube -/
+
+noncomputable def c3 : ℝ := (Real.sqrt 3)⁻¹
+theorem c3_sq : c3 ^ 2 = 1 / 3 := by
+  rw [c3, inv_pow, Real.sq_sqrt (by norm_num : (0:ℝ) ≤ 3)]; norm_num
+theorem c3_pos : 0 < c3 := by rw [c3]; positivity
+noncomputable def cube : Fin 8 → EuclideanSpace ℝ (Fin 3) :=
+  ![ !₂[c3, c3, c3],   !₂[c3, c3, -c3],   !₂[c3, -c3, c3],   !₂[c3, -c3, -c3],
+     !₂[-c3, c3, c3],  !₂[-c3, c3, -c3],  !₂[-c3, -c3, c3],  !₂[-c3, -c3, -c3] ]
+
+theorem cube0 : cube 0 = !₂[c3, c3, c3] := rfl
+theorem cube1 : cube 1 = !₂[c3, c3, -c3] := rfl
+theorem cube2 : cube 2 = !₂[c3, -c3, c3] := rfl
+theorem cube3 : cube 3 = !₂[c3, -c3, -c3] := rfl
+theorem cube4 : cube 4 = !₂[-c3, c3, c3] := rfl
+theorem cube5 : cube 5 = !₂[-c3, c3, -c3] := rfl
+theorem cube6 : cube 6 = !₂[-c3, -c3, c3] := rfl
+theorem cube7 : cube 7 = !₂[-c3, -c3, -c3] := rfl
+
+theorem sqrt4 : Real.sqrt 4 = 2 := by
+  rw [show (4:ℝ) = 2 ^ 2 by norm_num, Real.sqrt_sq (by norm_num)]
+theorem inv_sqrt_43 : (Real.sqrt (4 / 3))⁻¹ = Real.sqrt 3 / 2 := by
+  rw [Real.sqrt_div (by norm_num), sqrt4, inv_div]
+theorem inv_sqrt_83 : (Real.sqrt (8 / 3))⁻¹ = Real.sqrt 6 / 4 := by
+  apply inv_eq_of_mul_eq_one_right
+  rw [mul_div_assoc', ← Real.sqrt_mul (by norm_num), show (8:ℝ) / 3 * 6 = 4 ^ 2 by norm_num,
+    Real.sqrt_sq (by norm_num)]
+  norm_num
+
+theorem cube_energy : energy cube = 6 * Real.sqrt 3 + 3 * Real.sqrt 6 + 2 := by
+  have i0 : Finset.Ioi (0 : Fin 8) = {1, 2, 3, 4, 5, 6, 7} := by decide
+  have i1 : Finset.Ioi (1 : Fin 8) = {2, 3, 4, 5, 6, 7} := by decide
+  have i2 : Finset.Ioi (2 : Fin 8) = {3, 4, 5, 6, 7} := by decide
+  have i3 : Finset.Ioi (3 : Fin 8) = {4, 5, 6, 7} := by decide
+  have i4 : Finset.Ioi (4 : Fin 8) = {5, 6, 7} := by decide
+  have i5 : Finset.Ioi (5 : Fin 8) = {6, 7} := by decide
+  have i6 : Finset.Ioi (6 : Fin 8) = {7} := by decide
+  have i7 : Finset.Ioi (7 : Fin 8) = ∅ := by decide
+  simp only [energy, Fin.sum_univ_eight, i0, i1, i2, i3, i4, i5, i6, i7,
+    Finset.sum_empty, Finset.sum_singleton]
+  repeat rw [Finset.sum_insert (by decide)]
+  simp only [Finset.sum_singleton, cube0, cube1, cube2, cube3, cube4, cube5, cube6, cube7,
+    sub_e3, norm_e3]
+  ring_nf
+  simp only [c3_sq]
+  norm_num [inv_sqrt_43, inv_sqrt_83, sqrt4]
+  have h8 : Real.sqrt 8 = 2 * Real.sqrt 2 := by
+    rw [show (8:ℝ) = 2 ^ 2 * 2 by norm_num, Real.sqrt_mul (by norm_num), Real.sqrt_sq (by norm_num)]
+  have h6 : Real.sqrt 6 = Real.sqrt 3 * Real.sqrt 2 := by
+    rw [← Real.sqrt_mul (by norm_num)]; norm_num
+  have h2 : Real.sqrt 2 * Real.sqrt 2 = 2 := Real.mul_self_sqrt (by norm_num)
+  have hs2 : 0 < Real.sqrt 2 := by positivity
+  have key : (2 * Real.sqrt 2)⁻¹ = Real.sqrt 2 / 4 := by
+    field_simp; nlinarith [h2]
+  rw [h8, h6]; simp only [div_eq_mul_inv, key]; ring
+
+theorem cube_onSphere : OnSphere cube := by
+  intro i
+  fin_cases i <;> simp [cube, norm_e3] <;> ring_nf <;> simp [c3_sq] <;> norm_num
+
+theorem cube_injective : Function.Injective cube := by
+  have hc := c3_pos
+  intro i j h
+  fin_cases i <;> fin_cases j <;>
+    simp only [cube0, cube1, cube2, cube3, cube4, cube5, cube6, cube7] at h <;>
+    first
+    | rfl
+    | (obtain ⟨h0, h1, h2⟩ := e3_inj h; linarith)
+
+theorem cube_admissible : Admissible cube := ⟨cube_onSphere, cube_injective⟩
+
+/-! ## 6. The square antiprism -/
+
+noncomputable def antiprism (h : ℝ) : Fin 8 → EuclideanSpace ℝ (Fin 3) :=
+  let r : ℝ := Real.sqrt (1 - h ^ 2)
+  let s : ℝ := r * Real.sqrt 2 / 2
+  ![ !₂[r, 0, h],   !₂[0, r, h],    !₂[-r, 0, h],   !₂[0, -r, h],
+     !₂[s, s, -h],  !₂[-s, s, -h],  !₂[-s, -s, -h], !₂[s, -s, -h] ]
+
+noncomputable def antiprismEnergy (u : ℝ) : ℝ :=
+  (4 * Real.sqrt 2 + 2) * (Real.sqrt (1 - u))⁻¹
+    + 8 * (Real.sqrt ((2 - Real.sqrt 2) + (2 + Real.sqrt 2) * u))⁻¹
+    + 8 * (Real.sqrt ((2 + Real.sqrt 2) + (2 - Real.sqrt 2) * u))⁻¹
+
+section ap
+variable (h : ℝ)
+local notation "r" => Real.sqrt (1 - h ^ 2)
+local notation "s" => Real.sqrt (1 - h ^ 2) * Real.sqrt 2 / 2
+theorem ap0 : antiprism h 0 = !₂[r, 0, h] := rfl
+theorem ap1 : antiprism h 1 = !₂[0, r, h] := rfl
+theorem ap2 : antiprism h 2 = !₂[-r, 0, h] := rfl
+theorem ap3 : antiprism h 3 = !₂[0, -r, h] := rfl
+theorem ap4 : antiprism h 4 = !₂[s, s, -h] := rfl
+theorem ap5 : antiprism h 5 = !₂[-s, s, -h] := rfl
+theorem ap6 : antiprism h 6 = !₂[-s, -s, -h] := rfl
+theorem ap7 : antiprism h 7 = !₂[s, -s, -h] := rfl
+end ap
+
+theorem antiprism_energy_eq' {h : ℝ} (h1 : h ^ 2 < 1) :
+    energy (antiprism h) = antiprismEnergy (h ^ 2) := by
+  have hu : 0 < 1 - h ^ 2 := by linarith
+  have hr2 : Real.sqrt (1 - h ^ 2) ^ 2 = 1 - h ^ 2 := Real.sq_sqrt hu.le
+  have h2 : Real.sqrt 2 ^ 2 = 2 := Real.sq_sqrt (by norm_num)
+  have i0 : Finset.Ioi (0 : Fin 8) = {1, 2, 3, 4, 5, 6, 7} := by decide
+  have i1 : Finset.Ioi (1 : Fin 8) = {2, 3, 4, 5, 6, 7} := by decide
+  have i2 : Finset.Ioi (2 : Fin 8) = {3, 4, 5, 6, 7} := by decide
+  have i3 : Finset.Ioi (3 : Fin 8) = {4, 5, 6, 7} := by decide
+  have i4 : Finset.Ioi (4 : Fin 8) = {5, 6, 7} := by decide
+  have i5 : Finset.Ioi (5 : Fin 8) = {6, 7} := by decide
+  have i6 : Finset.Ioi (6 : Fin 8) = {7} := by decide
+  have i7 : Finset.Ioi (7 : Fin 8) = ∅ := by decide
+  simp only [energy, Fin.sum_univ_eight, i0, i1, i2, i3, i4, i5, i6, i7,
+    Finset.sum_empty, Finset.sum_singleton]
+  repeat rw [Finset.sum_insert (by decide)]
+  simp only [Finset.sum_singleton, ap0, ap1, ap2, ap3, ap4, ap5, ap6, ap7, sub_e3, norm_e3,
+    antiprismEnergy]
+  ring_nf
+  simp only [hr2, h2]
+  ring_nf
+  have hr : 0 < Real.sqrt (1 - h ^ 2) := Real.sqrt_pos.mpr hu
+  have h22 : Real.sqrt 2 * Real.sqrt 2 = 2 := Real.mul_self_sqrt (by norm_num)
+  have hs2 : 0 < Real.sqrt 2 := by positivity
+  have e1 : Real.sqrt (2 - h ^ 2 * 2) = Real.sqrt 2 * Real.sqrt (1 - h ^ 2) := by
+    rw [← Real.sqrt_mul (by norm_num)]; ring_nf
+  have e2 : Real.sqrt (4 - h ^ 2 * 4) = 2 * Real.sqrt (1 - h ^ 2) := by
+    rw [show (4:ℝ) - h ^ 2 * 4 = 2 ^ 2 * (1 - h ^ 2) by ring, Real.sqrt_mul (by norm_num),
+      Real.sqrt_sq (by norm_num)]
+  have hi : (Real.sqrt 2)⁻¹ = Real.sqrt 2 / 2 := by
+    field_simp; linarith [h22]
+  have key : (Real.sqrt 2 * Real.sqrt (1 - h ^ 2))⁻¹ * 8 + (2 * Real.sqrt (1 - h ^ 2))⁻¹ * 4
+      = Real.sqrt 2 * (Real.sqrt (1 - h ^ 2))⁻¹ * 4 + (Real.sqrt (1 - h ^ 2))⁻¹ * 2 := by
+    rw [mul_inv, mul_inv, hi]; ring
+  rw [e1, e2]
+  linarith [key]
+
+theorem antiprism_energy_eq {h : ℝ} (h0 : 0 < h) (h1 : h < 1) :
+    energy (antiprism h) = antiprismEnergy (h ^ 2) :=
+  antiprism_energy_eq' (by nlinarith)
+
+theorem norm_e3_eq_one {a b c : ℝ} (habc : a ^ 2 + b ^ 2 + c ^ 2 = 1) :
+    ‖(!₂[a, b, c] : EuclideanSpace ℝ (Fin 3))‖ = 1 := by
+  rw [norm_e3, habc, Real.sqrt_one]
+
+theorem antiprism_onSphere {h : ℝ} (h0 : 0 < h) (h1 : h < 1) : OnSphere (antiprism h) := by
+  have hu : 0 < 1 - h ^ 2 := by nlinarith
+  have hr2 : Real.sqrt (1 - h ^ 2) ^ 2 = 1 - h ^ 2 := Real.sq_sqrt hu.le
+  have h2 : Real.sqrt 2 ^ 2 = 2 := Real.sq_sqrt (by norm_num)
+  intro i
+  fin_cases i
+  · show ‖antiprism h 0‖ = 1; rw [ap0]; exact norm_e3_eq_one (by linear_combination hr2)
+  · show ‖antiprism h 1‖ = 1; rw [ap1]; exact norm_e3_eq_one (by linear_combination hr2)
+  · show ‖antiprism h 2‖ = 1; rw [ap2]; exact norm_e3_eq_one (by linear_combination hr2)
+  · show ‖antiprism h 3‖ = 1; rw [ap3]; exact norm_e3_eq_one (by linear_combination hr2)
+  · show ‖antiprism h 4‖ = 1; rw [ap4]
+    exact norm_e3_eq_one (by linear_combination (Real.sqrt 2 ^ 2 / 2) * hr2 + ((1 - h ^ 2) / 2) * h2)
+  · show ‖antiprism h 5‖ = 1; rw [ap5]
+    exact norm_e3_eq_one (by linear_combination (Real.sqrt 2 ^ 2 / 2) * hr2 + ((1 - h ^ 2) / 2) * h2)
+  · show ‖antiprism h 6‖ = 1; rw [ap6]
+    exact norm_e3_eq_one (by linear_combination (Real.sqrt 2 ^ 2 / 2) * hr2 + ((1 - h ^ 2) / 2) * h2)
+  · show ‖antiprism h 7‖ = 1; rw [ap7]
+    exact norm_e3_eq_one (by linear_combination (Real.sqrt 2 ^ 2 / 2) * hr2 + ((1 - h ^ 2) / 2) * h2)
+
+theorem antiprism_injective {h : ℝ} (h0 : 0 < h) (h1 : h < 1) :
+    Function.Injective (antiprism h) := by
+  have hu : 0 < 1 - h ^ 2 := by nlinarith
+  have hr : 0 < Real.sqrt (1 - h ^ 2) := Real.sqrt_pos.mpr hu
+  have hs : 0 < Real.sqrt (1 - h ^ 2) * Real.sqrt 2 / 2 := by positivity
+  intro i j hij
+  fin_cases i <;> fin_cases j <;>
+    simp only [ap0, ap1, ap2, ap3, ap4, ap5, ap6, ap7] at hij <;>
+    first
+    | rfl
+    | (obtain ⟨e0, e1, e2⟩ := e3_inj hij; linarith)
+
+theorem antiprism_admissible {h : ℝ} (h0 : 0 < h) (h1 : h < 1) : Admissible (antiprism h) :=
+  ⟨antiprism_onSphere h0 h1, antiprism_injective h0 h1⟩
+
+/-! ## 7. Certified upper bound; the cube is not optimal -/
+
+theorem sqrt2_bounds : (141421356 / 100000000 : ℝ) < Real.sqrt 2 ∧
+    Real.sqrt 2 < 141421357 / 100000000 := by
+  constructor
+  · rw [Real.lt_sqrt (by norm_num)]; norm_num
+  · rw [Real.sqrt_lt' (by norm_num)]; norm_num
+
+theorem inv_sqrt_lt {X y : ℝ} (hy : 0 < y) (hX : y ^ 2 < X) : (Real.sqrt X)⁻¹ < y⁻¹ := by
+  have hlt : y < Real.sqrt X := (Real.lt_sqrt hy.le).mpr hX
+  have hX0 : 0 < Real.sqrt X := lt_trans hy hlt
+  exact (inv_lt_inv₀ hX0 hy).mpr hlt
+
+theorem antiprismEnergy_bound : antiprismEnergy ((14 / 25) ^ 2) < 19.6753 := by
+  obtain ⟨s2l, s2u⟩ := sqrt2_bounds
+  unfold antiprismEnergy
+  have t1 : (4 * Real.sqrt 2 + 2) * (Real.sqrt (1 - (14 / 25) ^ 2))⁻¹
+      < (191421357 / 25000000) * (4142463 / 5000000)⁻¹ :=
+    mul_lt_mul'' (by linarith) (inv_sqrt_lt (by norm_num) (by norm_num))
+      (by positivity) (by positivity)
+  have t2 : 8 * (Real.sqrt ((2 - Real.sqrt 2) + (2 + Real.sqrt 2) * (14 / 25) ^ 2))⁻¹
+      < 8 * (6435223 / 5000000)⁻¹ := by
+    apply mul_lt_mul_of_pos_left _ (by norm_num)
+    apply inv_sqrt_lt (by norm_num)
+    nlinarith [s2u]
+  have t3 : 8 * (Real.sqrt ((2 + Real.sqrt 2) + (2 - Real.sqrt 2) * (14 / 25) ^ 2))⁻¹
+      < 8 * (94840869 / 50000000)⁻¹ := by
+    apply mul_lt_mul_of_pos_left _ (by norm_num)
+    apply inv_sqrt_lt (by norm_num)
+    nlinarith [s2l]
+  have total : (191421357 / 25000000 : ℝ) * (4142463 / 5000000)⁻¹ + 8 * (6435223 / 5000000)⁻¹
+      + 8 * (94840869 / 50000000)⁻¹ < 19.6753 := by norm_num
+  linarith
+
+theorem thomson_eight_upper : thomsonInf 8 < 19.6753 := by
+  have hadm := antiprism_admissible (h := 14 / 25) (by norm_num) (by norm_num)
+  have hle : thomsonInf 8 ≤ energy (antiprism (14 / 25)) := by
+    apply csInf_le
+    · exact ⟨0, by rintro e ⟨x, -, rfl⟩; exact energy_nonneg x⟩
+    · exact ⟨_, hadm, rfl⟩
+  rw [antiprism_energy_eq (by norm_num) (by norm_num)] at hle
+  exact lt_of_le_of_lt hle antiprismEnergy_bound
+
+theorem cube_not_minimal : thomsonInf 8 < energy cube := by
+  have h3 : (1732 / 1000 : ℝ) < Real.sqrt 3 := by rw [Real.lt_sqrt (by norm_num)]; norm_num
+  have h6 : (2449 / 1000 : ℝ) < Real.sqrt 6 := by rw [Real.lt_sqrt (by norm_num)]; norm_num
+  rw [cube_energy]
+  linarith [thomson_eight_upper]
+
+/-! ## 8. The optimal parameter `uStar`, and the easy half of the main theorem -/
+
+/-- The parameter window `[1/4, 1/2]` for `u = h²`; the conjectured optimum `u* ≈ 0.314` lies inside. -/
+def window : Set ℝ := Set.Icc (1 / 4) (1 / 2)
+
+theorem antiprismEnergy_continuousOn : ContinuousOn antiprismEnergy window := by
+  unfold antiprismEnergy window
+  have hs2 : (0:ℝ) < Real.sqrt 2 := by positivity
+  have hs2' : Real.sqrt 2 < 2 := by rw [Real.sqrt_lt' (by norm_num)]; norm_num
+  refine ContinuousOn.add (ContinuousOn.add ?_ ?_) ?_
+  · refine ContinuousOn.mul continuousOn_const (ContinuousOn.inv₀ (by fun_prop) ?_)
+    intro u hu; exact (Real.sqrt_pos.mpr (by linarith [hu.2])).ne'
+  · refine ContinuousOn.mul continuousOn_const (ContinuousOn.inv₀ (by fun_prop) ?_)
+    intro u hu; exact (Real.sqrt_pos.mpr (by nlinarith [hu.1, hs2, hs2'])).ne'
+  · refine ContinuousOn.mul continuousOn_const (ContinuousOn.inv₀ (by fun_prop) ?_)
+    intro u hu; exact (Real.sqrt_pos.mpr (by nlinarith [hu.1, hs2, hs2'])).ne'
+
+theorem exists_uStar : ∃ u ∈ window, IsMinOn antiprismEnergy window u :=
+  isCompact_Icc.exists_isMinOn (Set.nonempty_Icc.mpr (by norm_num)) antiprismEnergy_continuousOn
+
+/-- The optimal antiprism parameter: a minimiser of `antiprismEnergy` on the window. -/
+noncomputable def uStar : ℝ := Classical.choose exists_uStar
+theorem uStar_mem : uStar ∈ window := (Classical.choose_spec exists_uStar).1
+theorem uStar_isMinOn : IsMinOn antiprismEnergy window uStar := (Classical.choose_spec exists_uStar).2
+
+/-- The easy half of the main theorem: the family's best member is an upper bound. -/
+theorem thomsonInf_le_uStar : thomsonInf 8 ≤ antiprismEnergy uStar := by
+  obtain ⟨hlo, hhi⟩ := uStar_mem
+  have hu0 : 0 < uStar := by linarith
+  set h := Real.sqrt uStar with hh
+  have h0 : 0 < h := Real.sqrt_pos.mpr hu0
+  have h1 : h < 1 := by rw [hh, Real.sqrt_lt' (by norm_num)]; linarith
+  have hsq : h ^ 2 = uStar := Real.sq_sqrt hu0.le
+  have hle : thomsonInf 8 ≤ energy (antiprism h) := by
+    apply csInf_le
+    · exact ⟨0, by rintro e ⟨x, -, rfl⟩; exact energy_nonneg x⟩
+    · exact ⟨_, antiprism_admissible h0 h1, rfl⟩
+  rwa [antiprism_energy_eq h0 h1, hsq] at hle
+
+
+/-- The *equilateral* square antiprism: the parameter `u_e = (2√2 − 1)/7` at which the square
+edge and the lateral edge coincide, so that all sixteen short edges have the common length
+`√((16 − 4√2)/7) = 1.2155625…`.
+
+This configuration is the one the linear-programming dual points at (its ideal pair-distance
+distribution asks for sixteen equal shortest edges), and it is also the Tammes optimum for
+eight points — no eight points on `S²` have a larger shortest distance.  It is therefore the
+natural analytic candidate for a counterexample.  It is not one: it loses to the Thomson
+antiprism by `0.0499`, twice the entire linear-programming gap. -/
+noncomputable def uEquilateral : ℝ := (2 * Real.sqrt 2 - 1) / 7
+
+theorem uEquilateral_mem : uEquilateral ∈ window := by
+  obtain ⟨hlo, hhi⟩ := sqrt2_bounds
+  rw [window, Set.mem_Icc, uEquilateral]
+  constructor <;> linarith
+
+/-- The equilateral (Tammes) antiprism does not beat the Thomson antiprism. -/
+theorem equilateral_not_better : antiprismEnergy uStar ≤ antiprismEnergy uEquilateral :=
+  uStar_isMinOn uEquilateral_mem
+
+/-! ## 9. First-order conditions (force balance) -/
+
+theorem energy_eq_half {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) :
+    energy x = (1 / 2) * ∑ i, ∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹ := by
+  have split : ∀ i : Fin n, ∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹
+      = ∑ j ∈ Finset.Ioi i, ‖x i - x j‖⁻¹ + ∑ j ∈ Finset.Iio i, ‖x i - x j‖⁻¹ := by
+    intro i
+    rw [← Finset.sum_union]
+    · congr 1; ext j
+      simp only [Finset.mem_erase, Finset.mem_univ, and_true, Finset.mem_union,
+        Finset.mem_Ioi, Finset.mem_Iio]
+      exact ⟨fun h => lt_or_gt_of_ne (Ne.symm h), fun h => h.elim (fun h => h.ne') (fun h => h.ne)⟩
+    · rw [Finset.disjoint_left]; intro j hj hj'
+      exact lt_asymm (Finset.mem_Ioi.mp hj) (Finset.mem_Iio.mp hj')
+  have swap : ∑ i, ∑ j ∈ Finset.Iio i, ‖x i - x j‖⁻¹ = ∑ i, ∑ j ∈ Finset.Ioi i, ‖x i - x j‖⁻¹ := by
+    rw [Finset.sum_comm' (t' := univ) (s' := fun j => Finset.Ioi j)]
+    · apply Finset.sum_congr rfl; intro j _
+      apply Finset.sum_congr rfl; intro i _
+      rw [norm_sub_rev]
+    · intro i j; simp [Finset.mem_Iio, Finset.mem_Ioi]
+  simp only [split, Finset.sum_add_distrib, swap, energy]
+  ring
+
+/-- Energy of the other points, excluding `i`. -/
+noncomputable def rest {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) (i : Fin n) : ℝ :=
+  (1 / 2) * ∑ k ∈ univ.erase i, ∑ j ∈ (univ.erase i).erase k, ‖x k - x j‖⁻¹
+
+theorem energy_update {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) (i : Fin n)
+    (p : EuclideanSpace ℝ (Fin 3)) :
+    energy (Function.update x i p) = (∑ j ∈ univ.erase i, ‖p - x j‖⁻¹) + rest x i := by
+  rw [energy_eq_half, rest]
+  rw [← Finset.add_sum_erase _ _ (Finset.mem_univ i)]
+  have hi : ∑ j ∈ univ.erase i, ‖Function.update x i p i - Function.update x i p j‖⁻¹
+      = ∑ j ∈ univ.erase i, ‖p - x j‖⁻¹ := by
+    apply Finset.sum_congr rfl; intro j hj
+    rw [Function.update_self, Function.update_of_ne (Finset.ne_of_mem_erase hj)]
+  have hk : ∀ k ∈ univ.erase i, ∑ j ∈ univ.erase k, ‖Function.update x i p k - Function.update x i p j‖⁻¹
+      = ‖p - x k‖⁻¹ + ∑ j ∈ (univ.erase i).erase k, ‖x k - x j‖⁻¹ := by
+    intro k hk
+    have hki : k ≠ i := Finset.ne_of_mem_erase hk
+    rw [← Finset.add_sum_erase _ _ (Finset.mem_erase.mpr ⟨hki.symm, Finset.mem_univ i⟩)]
+    rw [Function.update_of_ne hki, Function.update_self, norm_sub_rev, Finset.erase_right_comm]
+    congr 1
+    apply Finset.sum_congr rfl; intro j hj
+    have hji : j ≠ i := Finset.ne_of_mem_erase (Finset.mem_of_mem_erase hj)
+    rw [Function.update_of_ne hji]
+  rw [hi, Finset.sum_congr rfl hk, Finset.sum_add_distrib]
+  have hsym : ∑ k ∈ univ.erase i, ‖p - x k‖⁻¹ = ∑ j ∈ univ.erase i, ‖p - x j‖⁻¹ := rfl
+  rw [hsym]; ring
+
+theorem hasDerivAt_greatCircle (xi v : EuclideanSpace ℝ (Fin 3)) :
+    HasDerivAt (fun t : ℝ => Real.cos t • xi + Real.sin t • v) v 0 := by
+  have h1 := (Real.hasDerivAt_cos 0).smul_const xi
+  have h2 := (Real.hasDerivAt_sin 0).smul_const v
+  have := h1.add h2
+  refine this.congr_deriv ?_
+  simp
+
+theorem hasDerivAt_inv_norm_curve (xi v xj : EuclideanSpace ℝ (Fin 3)) (hne : xi - xj ≠ 0) :
+    HasDerivAt (fun t : ℝ => ‖(Real.cos t • xi + Real.sin t • v) - xj‖⁻¹)
+      (-(⟪xi - xj, v⟫ / ‖xi - xj‖ ^ 3)) 0 := by
+  set y : ℝ → EuclideanSpace ℝ (Fin 3) := fun t => (Real.cos t • xi + Real.sin t • v) - xj with hy
+  have hy0 : y 0 = xi - xj := by simp [hy]
+  have hyd : HasDerivAt y v 0 := (hasDerivAt_greatCircle xi v).sub_const xj
+  have hn : 0 < ‖xi - xj‖ := norm_pos_iff.mpr hne
+  have hq := hyd.norm_sq
+  rw [hy0] at hq
+  have hs := hq.sqrt (by rw [hy0]; positivity)
+  have hi := hs.inv (by rw [hy0]; positivity)
+  rw [hy0, Real.sqrt_sq (norm_nonneg _)] at hi
+  show HasDerivAt (fun t => ‖y t‖⁻¹) _ 0
+  have hfun : (fun t => ‖y t‖⁻¹) = (fun t => Real.sqrt (‖y t‖ ^ 2))⁻¹ := by
+    funext t; simp only [Pi.inv_apply]; rw [Real.sqrt_sq (norm_nonneg _)]
+  rw [hfun]
+  refine hi.congr_deriv ?_
+  field_simp
+
+/-- The Coulomb force on point `i`. -/
+noncomputable def force {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) (i : Fin n) :
+    EuclideanSpace ℝ (Fin 3) :=
+  ∑ j ∈ univ.erase i, (‖x i - x j‖ ^ 3)⁻¹ • (x i - x j)
+
+/-- The great circle through `x i` in direction `v` stays on the sphere. -/
+theorem norm_greatCircle {xi v : EuclideanSpace ℝ (Fin 3)} (hx : ‖xi‖ = 1) (hv : ‖v‖ = 1)
+    (hxv : ⟪xi, v⟫ = 0) (t : ℝ) : ‖Real.cos t • xi + Real.sin t • v‖ = 1 := by
+  have hsq : ‖Real.cos t • xi + Real.sin t • v‖ ^ 2 = 1 := by
+    rw [norm_add_sq_real, norm_smul, norm_smul, real_inner_smul_left, real_inner_smul_right, hxv,
+      hx, hv, Real.norm_eq_abs, Real.norm_eq_abs, mul_one, mul_one, sq_abs, sq_abs]
+    simp [Real.cos_sq_add_sin_sq]
+  rw [← Real.sqrt_sq (norm_nonneg _), hsq, Real.sqrt_one]
+
+/-- First variation: the force is orthogonal to every unit tangent vector at a minimiser. -/
+theorem force_inner_eq_zero {n : ℕ} {x : Fin n → EuclideanSpace ℝ (Fin 3)} (hx : Admissible x)
+    (hmin : ∀ y : Fin n → EuclideanSpace ℝ (Fin 3), Admissible y → energy x ≤ energy y)
+    (i : Fin n) (v : EuclideanSpace ℝ (Fin 3)) (hv1 : ‖v‖ = 1) (hvx : ⟪x i, v⟫ = 0) :
+    ⟪force x i, v⟫ = 0 := by
+  set γ : ℝ → EuclideanSpace ℝ (Fin 3) := fun t => Real.cos t • x i + Real.sin t • v with hγ
+  have hγ0 : γ 0 = x i := by simp [hγ]
+  have hγc : Continuous γ := by fun_prop
+  have hγn : ∀ t, ‖γ t‖ = 1 := fun t => norm_greatCircle (hx.1 i) hv1 hvx t
+  -- nearby configurations are admissible
+  have hev : ∀ᶠ t in nhds (0:ℝ), Admissible (Function.update x i (γ t)) := by
+    have hall : ∀ᶠ t in nhds (0:ℝ), ∀ j, j ≠ i → γ t ≠ x j := by
+      rw [Filter.eventually_all]; intro j
+      by_cases hj : j = i
+      · exact Filter.Eventually.of_forall fun t h => absurd hj h
+      · have : ∀ᶠ t in nhds (0:ℝ), γ t ≠ x j := by
+          apply hγc.continuousAt.eventually_ne
+          rw [hγ0]; exact fun h => hj (hx.2 h).symm
+        filter_upwards [this] with t ht; exact fun _ => ht
+    filter_upwards [hall] with t ht
+    refine ⟨?_, ?_⟩
+    · intro j; by_cases hj : j = i
+      · rw [hj, Function.update_self]; exact hγn t
+      · rw [Function.update_of_ne hj]; exact hx.1 j
+    · intro j k hjk
+      by_cases hj : j = i <;> by_cases hk : k = i
+      · rw [hj, hk]
+      · rw [hj, Function.update_self, Function.update_of_ne hk] at hjk; exact absurd hjk (ht k hk)
+      · rw [hk, Function.update_of_ne hj, Function.update_self] at hjk
+        exact absurd hjk.symm (ht j hj)
+      · rw [Function.update_of_ne hj, Function.update_of_ne hk] at hjk; exact hx.2 hjk
+  -- local minimum along the curve
+  have hloc : IsLocalMin (fun t => energy (Function.update x i (γ t))) 0 := by
+    unfold IsLocalMin IsMinFilter
+    filter_upwards [hev] with t ht
+    show energy (Function.update x i (γ 0)) ≤ energy (Function.update x i (γ t))
+    rw [hγ0, Function.update_eq_self]
+    exact hmin _ ht
+  -- derivative along the curve
+  have hderiv : HasDerivAt (fun t => energy (Function.update x i (γ t)))
+      (∑ j ∈ univ.erase i, -(⟪x i - x j, v⟫ / ‖x i - x j‖ ^ 3)) 0 := by
+    have hfun : (fun t => energy (Function.update x i (γ t)))
+        = fun t => (∑ j ∈ univ.erase i, ‖γ t - x j‖⁻¹) + rest x i := by
+      funext t; exact energy_update x i (γ t)
+    rw [hfun]
+    apply HasDerivAt.add_const
+    have hsum := HasDerivAt.sum (x := (0:ℝ)) (u := univ.erase i)
+      (A := fun j t => ‖γ t - x j‖⁻¹) (A' := fun j => -(⟪x i - x j, v⟫ / ‖x i - x j‖ ^ 3))
+      (fun j hj => by
+        have hne : x i - x j ≠ 0 := by
+          rw [sub_ne_zero]; exact fun h => (Finset.ne_of_mem_erase hj) (hx.2 h).symm
+        exact hasDerivAt_inv_norm_curve (x i) v (x j) hne)
+    have hfs : (∑ j ∈ univ.erase i, fun t : ℝ => ‖γ t - x j‖⁻¹)
+        = fun t => ∑ j ∈ univ.erase i, ‖γ t - x j‖⁻¹ := by
+      funext t; simp [Finset.sum_apply]
+    rw [hfs] at hsum
+    exact hsum
+  have hzero := hloc.hasDerivAt_eq_zero hderiv
+  rw [Finset.sum_neg_distrib, neg_eq_zero] at hzero
+  rw [force, sum_inner, ← hzero]
+  apply Finset.sum_congr rfl; intro j _
+  rw [real_inner_smul_left, inv_mul_eq_div]
+
+theorem force_balance {n : ℕ} {x : Fin n → EuclideanSpace ℝ (Fin 3)} (hx : Admissible x)
+    (hmin : ∀ y : Fin n → EuclideanSpace ℝ (Fin 3), Admissible y → energy x ≤ energy y)
+    (i : Fin n) :
+    force x i = ((2:ℝ)⁻¹ * ∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹) • x i := by
+  have hxi : ‖x i‖ = 1 := hx.1 i
+  -- Step 1: the force is parallel to `x i`
+  have hpar : force x i = ⟪force x i, x i⟫ • x i := by
+    set w := force x i - ⟪force x i, x i⟫ • x i with hw_def
+    have hw : ⟪x i, w⟫ = 0 := by
+      rw [hw_def, inner_sub_right, real_inner_smul_right, real_inner_self_eq_norm_sq, hxi,
+        real_inner_comm (x i) (force x i)]; ring
+    have hw0 : w = 0 := by
+      by_contra hw0
+      have hwn : 0 < ‖w‖ := norm_pos_iff.mpr hw0
+      have hu1 : ‖‖w‖⁻¹ • w‖ = 1 := by
+        rw [norm_smul, norm_inv, norm_norm, inv_mul_cancel₀ hwn.ne']
+      have hux : ⟪x i, ‖w‖⁻¹ • w⟫ = 0 := by rw [real_inner_smul_right, hw, mul_zero]
+      have h0 := force_inner_eq_zero hx hmin i _ hu1 hux
+      have hFw : ⟪force x i, w⟫ = ‖w‖ ^ 2 := by
+        have hF : force x i = w + ⟪force x i, x i⟫ • x i := by rw [hw_def]; abel
+        conv_lhs => rw [hF]
+        rw [inner_add_left, real_inner_smul_left, real_inner_self_eq_norm_sq, hw]; ring
+      rw [real_inner_smul_right, hFw] at h0
+      have : ‖w‖⁻¹ * ‖w‖ ^ 2 = ‖w‖ := by field_simp
+      rw [this] at h0
+      exact hwn.ne' h0
+    exact (sub_eq_zero.mp hw0)
+  -- Step 2: the multiplier
+  have hc : ⟪force x i, x i⟫ = (2:ℝ)⁻¹ * ∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹ := by
+    rw [force, sum_inner, Finset.mul_sum]
+    apply Finset.sum_congr rfl; intro j hj
+    have hne : x i - x j ≠ 0 := by
+      rw [sub_ne_zero]; exact fun h => (Finset.ne_of_mem_erase hj) (hx.2 h).symm
+    have hn : 0 < ‖x i - x j‖ := norm_pos_iff.mpr hne
+    have hxj : ‖x j‖ = 1 := hx.1 j
+    have key : ⟪x i - x j, x i⟫ = ‖x i - x j‖ ^ 2 / 2 := by
+      rw [norm_sub_sq_real, inner_sub_left, real_inner_self_eq_norm_sq, hxi, hxj,
+        real_inner_comm (x i) (x j)]; ring
+    rw [real_inner_smul_left, key]
+    field_simp
+  rw [← hc]; exact hpar
+
+/-! ## 10. The derivative of the family energy; pinning `uStar` -/
+
+/-- Derivative of `antiprismEnergy`. -/
+noncomputable def antiprismEnergy' (u : ℝ) : ℝ :=
+  (2 * Real.sqrt 2 + 1) / (Real.sqrt (1 - u)) ^ 3
+    - 4 * (2 + Real.sqrt 2) / (Real.sqrt ((2 - Real.sqrt 2) + (2 + Real.sqrt 2) * u)) ^ 3
+    - 4 * (2 - Real.sqrt 2) / (Real.sqrt ((2 + Real.sqrt 2) + (2 - Real.sqrt 2) * u)) ^ 3
+
+theorem sqrt2_lt_two : Real.sqrt 2 < 2 := by rw [Real.sqrt_lt' (by norm_num)]; norm_num
+theorem sqrt2_pos : 0 < Real.sqrt 2 := by positivity
+
+/-- `d/du (c * (√(p + q u))⁻¹) = -(c q / 2) / (√(p+qu))^3`. -/
+theorem hasDerivAt_c_inv_sqrt_affine (c p q u : ℝ) (hpos : 0 < p + q * u) :
+    HasDerivAt (fun v => c * (Real.sqrt (p + q * v))⁻¹)
+      (-(c * q / 2) / (Real.sqrt (p + q * u)) ^ 3) u := by
+  have h1 : HasDerivAt (fun v => p + q * v) q u := by
+    simpa using ((hasDerivAt_id u).const_mul q).const_add p
+  have h2 := (h1.sqrt hpos.ne').inv (Real.sqrt_pos.mpr hpos).ne'
+  have h3 := h2.const_mul c
+  refine h3.congr_deriv ?_
+  have hs : 0 < Real.sqrt (p + q * u) := Real.sqrt_pos.mpr hpos
+  field_simp
+
+theorem hasDerivAt_antiprismEnergy {u : ℝ} (hu0 : 0 ≤ u) (hu1 : u < 1) :
+    HasDerivAt antiprismEnergy (antiprismEnergy' u) u := by
+  have hs2 := sqrt2_pos; have hs2' := sqrt2_lt_two
+  have e1 := hasDerivAt_c_inv_sqrt_affine (4 * Real.sqrt 2 + 2) 1 (-1) u (by linarith)
+  have e2 := hasDerivAt_c_inv_sqrt_affine 8 (2 - Real.sqrt 2) (2 + Real.sqrt 2) u (by nlinarith)
+  have e3 := hasDerivAt_c_inv_sqrt_affine 8 (2 + Real.sqrt 2) (2 - Real.sqrt 2) u (by nlinarith)
+  have := (e1.add e2).add e3
+  refine (this.congr_deriv ?_).congr_of_eventuallyEq ?_
+  · unfold antiprismEnergy'
+    simp only [show (1:ℝ) + -1 * u = 1 - u by ring]
+    ring
+  · exact Filter.Eventually.of_forall fun v => by
+      simp only [Pi.add_apply, antiprismEnergy]; ring_nf
+
+/-- `C / (√·)^3` is strictly decreasing on positives. -/
+theorem div_cube_sqrt_lt {C x y : ℝ} (hC : 0 < C) (hx : 0 < x) (hxy : x < y) :
+    C / (Real.sqrt y) ^ 3 < C / (Real.sqrt x) ^ 3 := by
+  have hsx : 0 < Real.sqrt x := Real.sqrt_pos.mpr hx
+  have hlt : Real.sqrt x < Real.sqrt y := Real.sqrt_lt_sqrt hx.le hxy
+  have hcube : (Real.sqrt x) ^ 3 < (Real.sqrt y) ^ 3 := by gcongr
+  exact div_lt_div_of_pos_left hC (by positivity) hcube
+
+/-- `antiprismEnergy'` is strictly increasing on `[0, 1)`. -/
+theorem antiprismEnergy'_strictMonoOn : StrictMonoOn antiprismEnergy' (Set.Ico 0 1) := by
+  intro u hu v hv huv
+  have hs2 := sqrt2_pos; have hs2' := sqrt2_lt_two
+  unfold antiprismEnergy'
+  have t1 : (2 * Real.sqrt 2 + 1) / (Real.sqrt (1 - u)) ^ 3
+      < (2 * Real.sqrt 2 + 1) / (Real.sqrt (1 - v)) ^ 3 :=
+    div_cube_sqrt_lt (by positivity) (by linarith [hv.2]) (by linarith)
+  have t2 : 4 * (2 + Real.sqrt 2) / (Real.sqrt ((2 - Real.sqrt 2) + (2 + Real.sqrt 2) * v)) ^ 3
+      < 4 * (2 + Real.sqrt 2) / (Real.sqrt ((2 - Real.sqrt 2) + (2 + Real.sqrt 2) * u)) ^ 3 :=
+    div_cube_sqrt_lt (by positivity) (by nlinarith [hu.1]) (by nlinarith)
+  have t3 : 4 * (2 - Real.sqrt 2) / (Real.sqrt ((2 + Real.sqrt 2) + (2 - Real.sqrt 2) * v)) ^ 3
+      < 4 * (2 - Real.sqrt 2) / (Real.sqrt ((2 + Real.sqrt 2) + (2 - Real.sqrt 2) * u)) ^ 3 :=
+    div_cube_sqrt_lt (by nlinarith) (by nlinarith [hu.1]) (by nlinarith)
+  linarith
+
+theorem term_lt {coeff c X y : ℝ} (hc : coeff ≤ c) (hc0 : 0 < c) (hy : 0 < y) (hX : y ^ 2 < X) :
+    coeff / (Real.sqrt X) ^ 3 < c / y ^ 3 := by
+  have hlt : y < Real.sqrt X := (Real.lt_sqrt hy.le).mpr hX
+  have hsX : 0 < Real.sqrt X := lt_trans hy hlt
+  have hcube : y ^ 3 < (Real.sqrt X) ^ 3 := by gcongr
+  calc coeff / (Real.sqrt X) ^ 3 ≤ c / (Real.sqrt X) ^ 3 :=
+        div_le_div_of_nonneg_right hc (by positivity)
+    _ < c / y ^ 3 := div_lt_div_of_pos_left hc0 (by positivity) hcube
+
+theorem lt_term {coeff c X z : ℝ} (hc : c ≤ coeff) (hc0 : 0 < c) (hX0 : 0 < X) (hz : 0 < z)
+    (hX : X < z ^ 2) : c / z ^ 3 < coeff / (Real.sqrt X) ^ 3 := by
+  have hlt : Real.sqrt X < z := by rw [Real.sqrt_lt' hz]; exact hX
+  have hsX : 0 < Real.sqrt X := Real.sqrt_pos.mpr hX0
+  have hcube : (Real.sqrt X) ^ 3 < z ^ 3 := by gcongr
+  calc c / z ^ 3 < c / (Real.sqrt X) ^ 3 := div_lt_div_of_pos_left hc0 (by positivity) hcube
+    _ ≤ coeff / (Real.sqrt X) ^ 3 := div_le_div_of_nonneg_right hc (by positivity)
+
+theorem antiprismEnergy'_neg : antiprismEnergy' (157 / 500) < 0 := by
+  obtain ⟨s2l, s2u⟩ := sqrt2_bounds
+  unfold antiprismEnergy'
+  have t1 := term_lt (coeff := 2 * Real.sqrt 2 + 1) (c := 191421357 / 50000000)
+    (X := 1 - 157 / 500) (y := 828251169 / 1000000000) (by linarith) (by norm_num) (by norm_num)
+    (by norm_num)
+  have t2 := lt_term (coeff := 4 * (2 + Real.sqrt 2)) (c := 85355339 / 6250000)
+    (X := (2 - Real.sqrt 2) + (2 + Real.sqrt 2) * (157 / 500)) (z := 643787523 / 500000000)
+    (by linarith) (by norm_num) (by nlinarith) (by norm_num) (by nlinarith)
+  have t3 := lt_term (coeff := 4 * (2 - Real.sqrt 2)) (c := 58578643 / 25000000)
+    (X := (2 + Real.sqrt 2) + (2 - Real.sqrt 2) * (157 / 500)) (z := 37937583 / 20000000)
+    (by linarith) (by norm_num) (by nlinarith) (by norm_num) (by nlinarith)
+  have hnum : (191421357 / 50000000 : ℝ) / (828251169 / 1000000000) ^ 3
+      - 85355339 / 6250000 / (643787523 / 500000000) ^ 3
+      - 58578643 / 25000000 / (37937583 / 20000000) ^ 3 < 0 := by norm_num
+  linarith
+
+theorem antiprismEnergy'_pos : 0 < antiprismEnergy' (1571 / 5000) := by
+  obtain ⟨s2l, s2u⟩ := sqrt2_bounds
+  unfold antiprismEnergy'
+  have t1 := lt_term (coeff := 2 * Real.sqrt 2 + 1) (c := 47855339 / 12500000)
+    (X := 1 - 1571 / 5000) (z := 33125217 / 40000000) (by linarith) (by norm_num) (by norm_num)
+    (by norm_num) (by norm_num)
+  have t2 := term_lt (coeff := 4 * (2 + Real.sqrt 2)) (c := 341421357 / 25000000)
+    (X := (2 - Real.sqrt 2) + (2 + Real.sqrt 2) * (1571 / 5000)) (y := 1287840181 / 1000000000)
+    (by linarith) (by norm_num) (by norm_num) (by nlinarith)
+  have t3 := term_lt (coeff := 4 * (2 - Real.sqrt 2)) (c := 14644661 / 6250000)
+    (X := (2 + Real.sqrt 2) + (2 - Real.sqrt 2) * (1571 / 5000)) (y := 1896910029 / 1000000000)
+    (by linarith) (by norm_num) (by norm_num) (by nlinarith)
+  have hnum : (0:ℝ) < 47855339 / 12500000 / (33125217 / 40000000) ^ 3
+      - 341421357 / 25000000 / (1287840181 / 1000000000) ^ 3
+      - 14644661 / 6250000 / (1896910029 / 1000000000) ^ 3 := by norm_num
+  linarith
+
+theorem uStar_mem_Icc : uStar ∈ Set.Icc (157 / 500 : ℝ) (1571 / 5000) := by
+  obtain ⟨hlo, hhi⟩ := uStar_mem
+  have hmin := uStar_isMinOn
+  have hmono := antiprismEnergy'_strictMonoOn
+  constructor
+  · by_contra hlt; push_neg at hlt
+    have hanti : StrictAntiOn antiprismEnergy (Set.Icc (1 / 4) (157 / 500)) := by
+      apply strictAntiOn_of_deriv_neg (convex_Icc _ _)
+      · exact antiprismEnergy_continuousOn.mono (Set.Icc_subset_Icc le_rfl (by norm_num))
+      · intro x hx
+        rw [interior_Icc] at hx
+        rw [(hasDerivAt_antiprismEnergy (by linarith [hx.1]) (by linarith [hx.2])).deriv]
+        have := hmono ⟨by linarith [hx.1], by linarith [hx.2]⟩ ⟨by norm_num, by norm_num⟩ hx.2
+        linarith [antiprismEnergy'_neg]
+    have h1 : antiprismEnergy (157 / 500) < antiprismEnergy uStar :=
+      hanti ⟨hlo, hlt.le⟩ ⟨by norm_num, le_rfl⟩ hlt
+    have h2 : antiprismEnergy uStar ≤ antiprismEnergy (157 / 500) :=
+      hmin (show (157 / 500 : ℝ) ∈ window from ⟨by norm_num, by norm_num⟩)
+    linarith
+  · by_contra hlt; push_neg at hlt
+    have hmono' : StrictMonoOn antiprismEnergy (Set.Icc (1571 / 5000) (1 / 2)) := by
+      apply strictMonoOn_of_deriv_pos (convex_Icc _ _)
+      · exact antiprismEnergy_continuousOn.mono (Set.Icc_subset_Icc (by norm_num) le_rfl)
+      · intro x hx
+        rw [interior_Icc] at hx
+        rw [(hasDerivAt_antiprismEnergy (by linarith [hx.1]) (by linarith [hx.2])).deriv]
+        have := hmono ⟨by norm_num, by norm_num⟩ ⟨by linarith [hx.1], by linarith [hx.2]⟩ hx.1
+        linarith [antiprismEnergy'_pos]
+    have h2 : antiprismEnergy uStar ≤ antiprismEnergy (1571 / 5000) :=
+      hmin (show (1571 / 5000 : ℝ) ∈ window from ⟨by norm_num, by norm_num⟩)
+    have h3 : antiprismEnergy (1571 / 5000) < antiprismEnergy uStar :=
+      hmono' ⟨le_rfl, by norm_num⟩ ⟨hlt.le, hhi⟩ hlt
+    linarith
+
+/-- The algebraic handle on `u*`: it is an interior minimiser, so the derivative vanishes.  This
+is the equation `E′(u*) = 0` over which any exact three-point certificate (§16) is built. -/
+theorem antiprismEnergy'_uStar : antiprismEnergy' uStar = 0 := by
+  obtain ⟨hlo, hhi⟩ := uStar_mem_Icc
+  have hd := hasDerivAt_antiprismEnergy (u := uStar) (by linarith) (by linarith)
+  have hloc : IsLocalMin antiprismEnergy uStar := by
+    have hmem : window ∈ nhds uStar := by
+      apply Icc_mem_nhds <;> norm_num <;> linarith
+    exact (uStar_isMinOn).isLocalMin hmem
+  exact hloc.hasDerivAt_eq_zero hd
+
+/-! ## 10b. Six digits of the family optimum -/
+
+theorem lt_inv_sqrt {X z : ℝ} (hz : 0 < z) (hX0 : 0 < X) (hX : X < z ^ 2) :
+    z⁻¹ < (Real.sqrt X)⁻¹ := by
+  have hlt : Real.sqrt X < z := by rw [Real.sqrt_lt' hz]; exact hX
+  have hsX : 0 < Real.sqrt X := Real.sqrt_pos.mpr hX0
+  exact (inv_lt_inv₀ hz hsX).mpr hlt
+
+theorem antiprismEnergy_lower_u1 : (196752879 / 10000000 : ℝ) < antiprismEnergy (157 / 500) := by
+  obtain ⟨s2l, s2u⟩ := sqrt2_bounds
+  unfold antiprismEnergy
+  have t1 : (47855339 / 6250000 : ℝ) * (82825117 / 100000000)⁻¹
+      < (4 * Real.sqrt 2 + 2) * (Real.sqrt (1 - 157 / 500))⁻¹ :=
+    mul_lt_mul'' (by linarith) (lt_inv_sqrt (by norm_num) (by norm_num) (by norm_num))
+      (by norm_num) (by norm_num)
+  have t2 : 8 * (643787523 / 500000000 : ℝ)⁻¹
+      < 8 * (Real.sqrt ((2 - Real.sqrt 2) + (2 + Real.sqrt 2) * (157 / 500)))⁻¹ := by
+    apply mul_lt_mul_of_pos_left _ (by norm_num)
+    exact lt_inv_sqrt (by norm_num) (by nlinarith) (by nlinarith)
+  have t3 : 8 * (37937583 / 20000000 : ℝ)⁻¹
+      < 8 * (Real.sqrt ((2 + Real.sqrt 2) + (2 - Real.sqrt 2) * (157 / 500)))⁻¹ := by
+    apply mul_lt_mul_of_pos_left _ (by norm_num)
+    exact lt_inv_sqrt (by norm_num) (by nlinarith) (by nlinarith)
+  have hnum : (196752879 / 10000000 : ℝ) < (47855339 / 6250000) * (82825117 / 100000000)⁻¹
+      + 8 * (643787523 / 500000000)⁻¹ + 8 * (37937583 / 20000000)⁻¹ := by norm_num
+  linarith
+
+theorem antiprismEnergy'_ge : -(1 / 250 : ℝ) < antiprismEnergy' (157 / 500) := by
+  obtain ⟨s2l, s2u⟩ := sqrt2_bounds
+  unfold antiprismEnergy'
+  have t1 := lt_term (coeff := 2 * Real.sqrt 2 + 1) (c := 47855339 / 12500000)
+    (X := 1 - 157 / 500) (z := 82825117 / 100000000) (by linarith) (by norm_num) (by norm_num)
+    (by norm_num) (by norm_num)
+  have t2 := term_lt (coeff := 4 * (2 + Real.sqrt 2)) (c := 341421357 / 25000000)
+    (X := (2 - Real.sqrt 2) + (2 + Real.sqrt 2) * (157 / 500)) (y := 643787521 / 500000000)
+    (by linarith) (by norm_num) (by norm_num) (by nlinarith)
+  have t3 := term_lt (coeff := 4 * (2 - Real.sqrt 2)) (c := 14644661 / 6250000)
+    (X := (2 + Real.sqrt 2) + (2 - Real.sqrt 2) * (157 / 500)) (y := 474219787 / 250000000)
+    (by linarith) (by norm_num) (by norm_num) (by nlinarith)
+  have hnum : -(1 / 250 : ℝ) < 47855339 / 12500000 / (82825117 / 100000000) ^ 3
+      - 341421357 / 25000000 / (643787521 / 500000000) ^ 3
+      - 14644661 / 6250000 / (474219787 / 250000000) ^ 3 := by norm_num
+  linarith
+
+/-- Six digits of the conjectured optimum: `19.675287 < E(u*) < 19.6753`. -/
+theorem antiprismEnergy_uStar_gt : (19675287 / 1000000 : ℝ) < antiprismEnergy uStar := by
+  obtain ⟨hlo, hhi⟩ := uStar_mem_Icc
+  have hmono := antiprismEnergy'_strictMonoOn
+  have key := Convex.mul_sub_le_image_sub_of_le_deriv (convex_Icc (157 / 500 : ℝ) (1571 / 5000))
+    (antiprismEnergy_continuousOn.mono (Set.Icc_subset_Icc (by norm_num) (by norm_num)))
+    (fun x hx => by
+      rw [interior_Icc] at hx
+      exact (hasDerivAt_antiprismEnergy (by linarith [hx.1])
+        (by linarith [hx.2])).differentiableAt.differentiableWithinAt)
+    (C := -(1 / 250)) (fun x hx => by
+      rw [interior_Icc] at hx
+      rw [(hasDerivAt_antiprismEnergy (by linarith [hx.1]) (by linarith [hx.2])).deriv]
+      have := hmono ⟨by norm_num, by norm_num⟩ ⟨by linarith [hx.1], by linarith [hx.2]⟩ hx.1
+      linarith [antiprismEnergy'_ge])
+    (157 / 500) ⟨le_rfl, by norm_num⟩ uStar ⟨hlo, hhi⟩ hlo
+  have h1 := antiprismEnergy_lower_u1
+  nlinarith [key, h1, hlo, hhi]
+
+theorem antiprismEnergy_uStar_lt : antiprismEnergy uStar < 19.6753 := by
+  have h : antiprismEnergy uStar ≤ antiprismEnergy (196 / 625) :=
+    uStar_isMinOn (show (196 / 625 : ℝ) ∈ window from ⟨by norm_num, by norm_num⟩)
+  have h2 : antiprismEnergy ((14 / 25) ^ 2) < 19.6753 := antiprismEnergy_bound
+  rw [show ((14:ℝ) / 25) ^ 2 = 196 / 625 by norm_num] at h2
+  exact lt_of_le_of_lt h h2
+
+/-! ## 11. Local minimality within the family -/
+
+/-- Local minimality within the antiprism family: every antiprism whose parameter is within
+`1/20` of `uStar` has energy at least `antiprismEnergy uStar`. -/
+theorem antiprism_local_min : ∃ ε > 0, ∃ u₀ ∈ Set.Ioo (0:ℝ) 1,
+    ∀ x : Fin 8 → EuclideanSpace ℝ (Fin 3), Admissible x →
+      (∃ h, |h ^ 2 - u₀| < ε ∧ x = antiprism h) → antiprismEnergy u₀ ≤ energy x := by
+  obtain ⟨hlo, hhi⟩ := uStar_mem_Icc
+  refine ⟨1 / 20, by norm_num, uStar, ⟨by linarith, by linarith⟩, ?_⟩
+  rintro x _ ⟨h, hh, rfl⟩
+  rw [abs_lt] at hh
+  have h1 : h ^ 2 < 1 := by linarith
+  rw [antiprism_energy_eq' h1]
+  exact uStar_isMinOn (show h ^ 2 ∈ window from ⟨by linarith, by linarith⟩)
+
+/-! ## 12. A rigorous lower bound: Yudin's linear-programming method -/
+
+theorem gram_nonneg {ι κ : Type*} [Fintype ι] [Fintype κ] (φ : κ → ι → ℝ) :
+    0 ≤ ∑ i, ∑ j, ∑ m, φ m i * φ m j := by
+  have : ∑ i, ∑ j, ∑ m, φ m i * φ m j = ∑ m, (∑ i, φ m i) ^ 2 :=
+    calc ∑ i, ∑ j, ∑ m, φ m i * φ m j = ∑ i, ∑ m, ∑ j, φ m i * φ m j :=
+          Finset.sum_congr rfl fun i _ => Finset.sum_comm
+      _ = ∑ m, ∑ i, ∑ j, φ m i * φ m j := Finset.sum_comm
+      _ = ∑ m, (∑ i, φ m i) ^ 2 := by
+          refine Finset.sum_congr rfl fun m _ => ?_
+          rw [sq, Finset.sum_mul_sum]
+  rw [this]; positivity
+
+theorem inner_coords (x y : EuclideanSpace ℝ (Fin 3)) :
+    ⟪x, y⟫ = x 0 * y 0 + x 1 * y 1 + x 2 * y 2 := by
+  simp [PiLp.inner_apply, Fin.sum_univ_three, mul_comm]
+
+theorem normsq_coords (x : EuclideanSpace ℝ (Fin 3)) (hx : ‖x‖ = 1) :
+    x 0 ^ 2 + x 1 ^ 2 + x 2 ^ 2 = 1 := by
+  have := real_inner_self_eq_norm_sq x
+  rw [hx, inner_coords] at this
+  nlinarith [this]
+
+theorem inner_eq_of_norm (x y : EuclideanSpace ℝ (Fin 3)) (hx : ‖x‖ = 1) (hy : ‖y‖ = 1) :
+    ⟪x, y⟫ = 1 - ‖x - y‖ ^ 2 / 2 := by
+  have := norm_sub_sq_real x y
+  rw [hx, hy] at this
+  linarith
+
+/-- Traceless symmetric 2-tensor: the real spherical harmonics of degree 2, unnormalised. -/
+noncomputable def T2 (a b : Fin 3) (x : EuclideanSpace ℝ (Fin 3)) : ℝ :=
+  x a * x b - (if a = b then 1 / 3 else 0)
+/-- Traceless symmetric 3-tensor: the real spherical harmonics of degree 3, unnormalised. -/
+noncomputable def T3 (a b c : Fin 3) (x : EuclideanSpace ℝ (Fin 3)) : ℝ :=
+  x a * x b * x c - (1 / 5) * ((if a = b then x c else 0) + (if a = c then x b else 0)
+    + (if b = c then x a else 0))
+
+/-- Addition theorem for `P₂` on the unit sphere. -/
+theorem P2_addition (x y : EuclideanSpace ℝ (Fin 3)) (hx : ‖x‖ = 1) (hy : ‖y‖ = 1) :
+    (3 * ⟪x, y⟫ ^ 2 - 1) / 2 = (3 / 2) * ∑ p : Fin 3 × Fin 3, T2 p.1 p.2 x * T2 p.1 p.2 y := by
+  have hx' := normsq_coords x hx; have hy' := normsq_coords y hy
+  rw [inner_coords, Fintype.sum_prod_type]
+  simp only [Fin.sum_univ_three, T2]
+  simp
+  linear_combination (1/2) * hx' + (1/2) * hy'
+
+/-- Addition theorem for `P₃` on the unit sphere. -/
+theorem P3_addition (x y : EuclideanSpace ℝ (Fin 3)) (hx : ‖x‖ = 1) (hy : ‖y‖ = 1) :
+    (5 * ⟪x, y⟫ ^ 3 - 3 * ⟪x, y⟫) / 2 =
+      (5 / 2) * ∑ p : Fin 3 × Fin 3 × Fin 3, T3 p.1 p.2.1 p.2.2 x * T3 p.1 p.2.1 p.2.2 y := by
+  have hx' := normsq_coords x hx; have hy' := normsq_coords y hy
+  rw [inner_coords, Fintype.sum_prod_type]
+  simp only [Fin.sum_univ_three, Fintype.sum_prod_type, T3]
+  simp
+  linear_combination (3/2) * (x 0 * y 0 + x 1 * y 1 + x 2 * y 2) * hx'
+    + (3/2) * (x 0 * y 0 + x 1 * y 1 + x 2 * y 2) * hy'
+
+/-- Schoenberg positivity for `P₁, P₂, P₃` on `S²`: the Gram sums are nonnegative. -/
+theorem sum_P1_nonneg {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) :
+    0 ≤ ∑ i, ∑ j, ⟪x i, x j⟫ := by
+  have h := gram_nonneg (fun (a : Fin 3) (i : Fin n) => x i a)
+  simpa [inner_coords, Fin.sum_univ_three] using h
+
+theorem sum_P2_nonneg {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) (hx : OnSphere x) :
+    0 ≤ ∑ i, ∑ j, (3 * ⟪x i, x j⟫ ^ 2 - 1) / 2 := by
+  have h := gram_nonneg (fun (p : Fin 3 × Fin 3) (i : Fin n) => T2 p.1 p.2 (x i))
+  simp only [P2_addition _ _ (hx _) (hx _), ← Finset.mul_sum]
+  positivity
+
+theorem sum_P3_nonneg {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) (hx : OnSphere x) :
+    0 ≤ ∑ i, ∑ j, (5 * ⟪x i, x j⟫ ^ 3 - 3 * ⟪x i, x j⟫) / 2 := by
+  have h := gram_nonneg (fun (p : Fin 3 × Fin 3 × Fin 3) (i : Fin n) => T3 p.1 p.2.1 p.2.2 (x i))
+  simp only [P3_addition _ _ (hx _) (hx _), ← Finset.mul_sum]
+  positivity
+
+/-- The degree-3 Yudin polynomial, with rational coefficients chosen so that
+`1 - s·f(1 - s²/2)` has double zeros at `s = 93/50` and `s = 31/25`. -/
+noncomputable def yudinF (t : ℝ) : ℝ :=
+  168670775401 / 239625993870 + 8858474125 / 23962599387 * t
+    + 6938750000 / 23962599387 * t ^ 2 + 3125000000 / 23962599387 * t ^ 3
+
+/-- Legendre expansion of `yudinF`, with all coefficients positive. -/
+theorem yudinF_legendre (t : ℝ) : yudinF t =
+    575399826203 / 718877981610 + 10733474125 / 23962599387 * t
+      + 13877500000 / 71887798161 * ((3 * t ^ 2 - 1) / 2)
+      + 1250000000 / 23962599387 * ((5 * t ^ 3 - 3 * t) / 2) := by
+  unfold yudinF; ring
+
+/-- The key one-variable inequality `f(1 - s²/2) ≤ 1/s` for `s > 0`. -/
+theorem yudinF_le_inv {s : ℝ} (hs : 0 < s) : yudinF (1 - s ^ 2 / 2) ≤ s⁻¹ := by
+  have key : 1 - s * yudinF (1 - s ^ 2 / 2) = (s - 93 / 50) ^ 2 * (s - 31 / 25) ^ 2
+      * (1562500 / 8311689 + 173593750 / 772987077 * s + 78125000 / 772987077 * s ^ 2
+        + 390625000 / 23962599387 * s ^ 3) := by
+    unfold yudinF; ring
+  have hq : 0 ≤ (s - 93 / 50) ^ 2 * (s - 31 / 25) ^ 2
+      * (1562500 / 8311689 + 173593750 / 772987077 * s + 78125000 / 772987077 * s ^ 2
+        + 390625000 / 23962599387 * s ^ 3) := by positivity
+  rw [← one_div, le_div_iff₀ hs]
+  linarith
+
+/-- **Yudin's bound, degree 3.**  Every admissible 8-point configuration has energy at least
+`7059039119342 / 359438990805 = 19.63904…`. -/
+theorem energy_ge_yudin (x : Fin 8 → EuclideanSpace ℝ (Fin 3)) (hx : Admissible x) :
+    (7059039119342 / 359438990805 : ℝ) ≤ energy x := by
+  obtain ⟨hsph, hinj⟩ := hx
+  -- off-diagonal terms are dominated by the Coulomb terms
+  have hterm : ∀ i j : Fin 8, i ≠ j → yudinF ⟪x i, x j⟫ ≤ ‖x i - x j‖⁻¹ := by
+    intro i j hij
+    have hne : x i - x j ≠ 0 := sub_ne_zero.mpr (fun h => hij (hinj h))
+    have hpos : 0 < ‖x i - x j‖ := norm_pos_iff.mpr hne
+    rw [inner_eq_of_norm _ _ (hsph i) (hsph j)]
+    exact yudinF_le_inv hpos
+  have hdiag : ∀ i : Fin 8, yudinF ⟪x i, x i⟫ = yudinF 1 := by
+    intro i; rw [real_inner_self_eq_norm_sq, hsph i]; norm_num
+  -- the double sum splits into diagonal and off-diagonal parts
+  have hsplit : ∑ i, ∑ j, yudinF ⟪x i, x j⟫
+      = ∑ i, yudinF ⟪x i, x i⟫ + ∑ i, ∑ j ∈ univ.erase i, yudinF ⟪x i, x j⟫ := by
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [← Finset.add_sum_erase _ _ (Finset.mem_univ i)]
+  have hoff : ∑ i, ∑ j ∈ univ.erase i, yudinF ⟪x i, x j⟫
+      ≤ ∑ i, ∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹ := by
+    refine Finset.sum_le_sum fun i _ => Finset.sum_le_sum fun j hj => ?_
+    exact hterm i j (Finset.ne_of_mem_erase hj).symm
+  have hupper : ∑ i, ∑ j, yudinF ⟪x i, x j⟫ ≤ 8 * yudinF 1 + 2 * energy x := by
+    rw [hsplit, energy_eq_half]
+    simp only [hdiag, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    push_cast
+    linarith
+  -- the Legendre expansion gives the lower bound `64 c₀`
+  have hlower : (64 : ℝ) * (575399826203 / 718877981610) ≤ ∑ i, ∑ j, yudinF ⟪x i, x j⟫ := by
+    simp only [yudinF_legendre, Finset.sum_add_distrib, ← Finset.mul_sum, Finset.sum_const,
+      Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    have h1 := sum_P1_nonneg x
+    have h2 := sum_P2_nonneg x hsph
+    have h3 := sum_P3_nonneg x hsph
+    push_cast
+    nlinarith [h1, h2, h3]
+  have hf1 : yudinF 1 = 463 / 310 := by unfold yudinF; norm_num
+  rw [hf1] at hupper
+  linarith
+
+/-- The infimum is at least `19.639`: a rigorous lower bound for the 8-point Thomson problem. -/
+theorem thomsonInf_ge_yudin : (7059039119342 / 359438990805 : ℝ) ≤ thomsonInf 8 := by
+  obtain ⟨x₀, hx₀⟩ := exists_admissible 8
+  refine le_csInf ⟨_, x₀, hx₀, rfl⟩ ?_
+  rintro e ⟨x, hx, rfl⟩
+  exact energy_ge_yudin x hx
+
+theorem thomsonInf_gt : (19.639 : ℝ) < thomsonInf 8 :=
+  lt_of_lt_of_le (by norm_num) thomsonInf_ge_yudin
+
+/-! ## 13. Higher-degree Schoenberg positivity, and an improved lower bound
+
+The degree-3 bound of §12 is not the best the linear-programming method can do: the optimal
+Yudin polynomial for `N = 8` also uses `P₄` and `P₇`.  Positivity of those two zonal kernels
+is proved here the same way, but with the *harmonic* feature map (`2k+1` real solid harmonics)
+instead of the full tensor: the identity to check is then homogeneous, needs no sphere
+hypothesis, and is closed by `ring`. -/
+
+/-- Summing a rank-one Gram kernel over all pairs gives a square. -/
+theorem sum_gram_eq {n : ℕ} (c : ℝ) (f : Fin n → ℝ) :
+    ∑ i, ∑ j, c * (f i * f j) = c * (∑ i, f i) ^ 2 := by
+  have inner : ∀ i : Fin n, ∑ j, c * (f i * f j) = c * f i * ∑ j, f j := by
+    intro i
+    rw [Finset.mul_sum]
+    exact Finset.sum_congr rfl fun j _ => by ring
+  rw [Finset.sum_congr rfl fun i (_ : i ∈ Finset.univ) => inner i, ← Finset.sum_mul,
+    ← Finset.mul_sum, sq]
+  ring
+
+/-! ### Real solid harmonics of degree 4 -/
+
+noncomputable def h4_0 (a b c : ℝ) : ℝ := 3*a^4 + 6*a^2*b^2 - 24*a^2*c^2 + 3*b^4 - 24*b^2*c^2 + 8*c^4
+noncomputable def h4_1 (a b c : ℝ) : ℝ := 3*a^3*c + 3*a*b^2*c - 4*a*c^3
+noncomputable def h4_2 (a b c : ℝ) : ℝ := 3*a^2*b*c + 3*b^3*c - 4*b*c^3
+noncomputable def h4_3 (a b c : ℝ) : ℝ := a^4 - 6*a^2*c^2 - b^4 + 6*b^2*c^2
+noncomputable def h4_4 (a b c : ℝ) : ℝ := a^3*b + a*b^3 - 6*a*b*c^2
+noncomputable def h4_5 (a b c : ℝ) : ℝ := a^3*c - 3*a*b^2*c
+noncomputable def h4_6 (a b c : ℝ) : ℝ := 3*a^2*b*c - b^3*c
+noncomputable def h4_7 (a b c : ℝ) : ℝ := a^4 - 6*a^2*b^2 + b^4
+noncomputable def h4_8 (a b c : ℝ) : ℝ := a^3*b - a*b^3
+
+/-- The homogeneous zonal identity in degree 4: a polynomial identity on `ℝ³ × ℝ³` with no
+sphere hypothesis, so `ring` closes it. -/
+theorem zonal4_hom (a b c u v w : ℝ) :
+    (3/8) * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) ^ 2 + (-15/4) * (a * u + b * v + c * w) ^ 2 * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) + (35/8) * (a * u + b * v + c * w) ^ 4
+      = (1/64) * (h4_0 a b c * h4_0 u v w)
+      + (5/8) * (h4_1 a b c * h4_1 u v w)
+      + (5/8) * (h4_2 a b c * h4_2 u v w)
+      + (5/16) * (h4_3 a b c * h4_3 u v w)
+      + (5/4) * (h4_4 a b c * h4_4 u v w)
+      + (35/8) * (h4_5 a b c * h4_5 u v w)
+      + (35/8) * (h4_6 a b c * h4_6 u v w)
+      + (35/64) * (h4_7 a b c * h4_7 u v w)
+      + (35/4) * (h4_8 a b c * h4_8 u v w) := by
+  unfold h4_0 h4_1 h4_2 h4_3 h4_4 h4_5 h4_6 h4_7 h4_8
+  ring
+
+/-- Addition theorem for `P4` on the unit sphere. -/
+theorem P4_addition (x y : EuclideanSpace ℝ (Fin 3)) (hx : ‖x‖ = 1) (hy : ‖y‖ = 1) :
+    (35 * ⟪x, y⟫ ^ 4 - 30 * ⟪x, y⟫ ^ 2 + 3) / 8
+      = (1/64) * (h4_0 (x 0) (x 1) (x 2) * h4_0 (y 0) (y 1) (y 2))
+      + (5/8) * (h4_1 (x 0) (x 1) (x 2) * h4_1 (y 0) (y 1) (y 2))
+      + (5/8) * (h4_2 (x 0) (x 1) (x 2) * h4_2 (y 0) (y 1) (y 2))
+      + (5/16) * (h4_3 (x 0) (x 1) (x 2) * h4_3 (y 0) (y 1) (y 2))
+      + (5/4) * (h4_4 (x 0) (x 1) (x 2) * h4_4 (y 0) (y 1) (y 2))
+      + (35/8) * (h4_5 (x 0) (x 1) (x 2) * h4_5 (y 0) (y 1) (y 2))
+      + (35/8) * (h4_6 (x 0) (x 1) (x 2) * h4_6 (y 0) (y 1) (y 2))
+      + (35/64) * (h4_7 (x 0) (x 1) (x 2) * h4_7 (y 0) (y 1) (y 2))
+      + (35/4) * (h4_8 (x 0) (x 1) (x 2) * h4_8 (y 0) (y 1) (y 2)) := by
+  have hx' := normsq_coords x hx
+  have hy' := normsq_coords y hy
+  have h := zonal4_hom (x 0) (x 1) (x 2) (y 0) (y 1) (y 2)
+  rw [hx', hy'] at h
+  rw [inner_coords]
+  linear_combination h
+
+/-- Schoenberg positivity in degree 4. -/
+theorem sum_P4_nonneg {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) (hx : OnSphere x) :
+    0 ≤ ∑ i, ∑ j, (35 * ⟪x i, x j⟫ ^ 4 - 30 * ⟪x i, x j⟫ ^ 2 + 3) / 8 := by
+  have step : ∑ i, ∑ j, (35 * ⟪x i, x j⟫ ^ 4 - 30 * ⟪x i, x j⟫ ^ 2 + 3) / 8
+      = ∑ i, ∑ j, ((1/64) * (h4_0 (x i 0) (x i 1) (x i 2) * h4_0 (x j 0) (x j 1) (x j 2))
+        + (5/8) * (h4_1 (x i 0) (x i 1) (x i 2) * h4_1 (x j 0) (x j 1) (x j 2))
+        + (5/8) * (h4_2 (x i 0) (x i 1) (x i 2) * h4_2 (x j 0) (x j 1) (x j 2))
+        + (5/16) * (h4_3 (x i 0) (x i 1) (x i 2) * h4_3 (x j 0) (x j 1) (x j 2))
+        + (5/4) * (h4_4 (x i 0) (x i 1) (x i 2) * h4_4 (x j 0) (x j 1) (x j 2))
+        + (35/8) * (h4_5 (x i 0) (x i 1) (x i 2) * h4_5 (x j 0) (x j 1) (x j 2))
+        + (35/8) * (h4_6 (x i 0) (x i 1) (x i 2) * h4_6 (x j 0) (x j 1) (x j 2))
+        + (35/64) * (h4_7 (x i 0) (x i 1) (x i 2) * h4_7 (x j 0) (x j 1) (x j 2))
+        + (35/4) * (h4_8 (x i 0) (x i 1) (x i 2) * h4_8 (x j 0) (x j 1) (x j 2))) :=
+    Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun j _ =>
+      P4_addition (x i) (x j) (hx i) (hx j)
+  rw [step]
+  simp only [Finset.sum_add_distrib, sum_gram_eq]
+  positivity
+
+/-! ### Real solid harmonics of degree 7 -/
+
+noncomputable def h7_0 (a b c : ℝ) : ℝ := 35*a^6*c + 105*a^4*b^2*c - 210*a^4*c^3 + 105*a^2*b^4*c - 420*a^2*b^2*c^3 + 168*a^2*c^5 + 35*b^6*c - 210*b^4*c^3 + 168*b^2*c^5 - 16*c^7
+noncomputable def h7_1 (a b c : ℝ) : ℝ := 5*a^7 + 15*a^5*b^2 - 120*a^5*c^2 + 15*a^3*b^4 - 240*a^3*b^2*c^2 + 240*a^3*c^4 + 5*a*b^6 - 120*a*b^4*c^2 + 240*a*b^2*c^4 - 64*a*c^6
+noncomputable def h7_2 (a b c : ℝ) : ℝ := 5*a^6*b + 15*a^4*b^3 - 120*a^4*b*c^2 + 15*a^2*b^5 - 240*a^2*b^3*c^2 + 240*a^2*b*c^4 + 5*b^7 - 120*b^5*c^2 + 240*b^3*c^4 - 64*b*c^6
+noncomputable def h7_3 (a b c : ℝ) : ℝ := 15*a^6*c + 15*a^4*b^2*c - 80*a^4*c^3 - 15*a^2*b^4*c + 48*a^2*c^5 - 15*b^6*c + 80*b^4*c^3 - 48*b^2*c^5
+noncomputable def h7_4 (a b c : ℝ) : ℝ := 15*a^5*b*c + 30*a^3*b^3*c - 80*a^3*b*c^3 + 15*a*b^5*c - 80*a*b^3*c^3 + 48*a*b*c^5
+noncomputable def h7_5 (a b c : ℝ) : ℝ := 3*a^7 - 3*a^5*b^2 - 60*a^5*c^2 - 15*a^3*b^4 + 120*a^3*b^2*c^2 + 80*a^3*c^4 - 9*a*b^6 + 180*a*b^4*c^2 - 240*a*b^2*c^4
+noncomputable def h7_6 (a b c : ℝ) : ℝ := 9*a^6*b + 15*a^4*b^3 - 180*a^4*b*c^2 + 3*a^2*b^5 - 120*a^2*b^3*c^2 + 240*a^2*b*c^4 - 3*b^7 + 60*b^5*c^2 - 80*b^3*c^4
+noncomputable def h7_7 (a b c : ℝ) : ℝ := 3*a^6*c - 15*a^4*b^2*c - 10*a^4*c^3 - 15*a^2*b^4*c + 60*a^2*b^2*c^3 + 3*b^6*c - 10*b^4*c^3
+noncomputable def h7_8 (a b c : ℝ) : ℝ := 3*a^5*b*c - 10*a^3*b*c^3 - 3*a*b^5*c + 10*a*b^3*c^3
+noncomputable def h7_9 (a b c : ℝ) : ℝ := a^7 - 9*a^5*b^2 - 12*a^5*c^2 - 5*a^3*b^4 + 120*a^3*b^2*c^2 + 5*a*b^6 - 60*a*b^4*c^2
+noncomputable def h7_10 (a b c : ℝ) : ℝ := 5*a^6*b - 5*a^4*b^3 - 60*a^4*b*c^2 - 9*a^2*b^5 + 120*a^2*b^3*c^2 + b^7 - 12*b^5*c^2
+noncomputable def h7_11 (a b c : ℝ) : ℝ := a^6*c - 15*a^4*b^2*c + 15*a^2*b^4*c - b^6*c
+noncomputable def h7_12 (a b c : ℝ) : ℝ := 3*a^5*b*c - 10*a^3*b^3*c + 3*a*b^5*c
+noncomputable def h7_13 (a b c : ℝ) : ℝ := a^7 - 21*a^5*b^2 + 35*a^3*b^4 - 7*a*b^6
+noncomputable def h7_14 (a b c : ℝ) : ℝ := 7*a^6*b - 35*a^4*b^3 + 21*a^2*b^5 - b^7
+
+/-- The homogeneous zonal identity in degree 7: a polynomial identity on `ℝ³ × ℝ³` with no
+sphere hypothesis, so `ring` closes it. -/
+theorem zonal7_hom (a b c u v w : ℝ) :
+    (-35/16) * (a * u + b * v + c * w) ^ 1 * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) ^ 3 + (315/16) * (a * u + b * v + c * w) ^ 3 * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) ^ 2 + (-693/16) * (a * u + b * v + c * w) ^ 5 * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) + (429/16) * (a * u + b * v + c * w) ^ 7
+      = (1/256) * (h7_0 a b c * h7_0 u v w)
+      + (7/1024) * (h7_1 a b c * h7_1 u v w)
+      + (7/1024) * (h7_2 a b c * h7_2 u v w)
+      + (21/512) * (h7_3 a b c * h7_3 u v w)
+      + (21/128) * (h7_4 a b c * h7_4 u v w)
+      + (21/1024) * (h7_5 a b c * h7_5 u v w)
+      + (21/1024) * (h7_6 a b c * h7_6 u v w)
+      + (231/256) * (h7_7 a b c * h7_7 u v w)
+      + (231/16) * (h7_8 a b c * h7_8 u v w)
+      + (231/1024) * (h7_9 a b c * h7_9 u v w)
+      + (231/1024) * (h7_10 a b c * h7_10 u v w)
+      + (3003/512) * (h7_11 a b c * h7_11 u v w)
+      + (3003/128) * (h7_12 a b c * h7_12 u v w)
+      + (429/1024) * (h7_13 a b c * h7_13 u v w)
+      + (429/1024) * (h7_14 a b c * h7_14 u v w) := by
+  unfold h7_0 h7_1 h7_2 h7_3 h7_4 h7_5 h7_6 h7_7 h7_8 h7_9 h7_10 h7_11 h7_12 h7_13 h7_14
+  ring
+
+/-- Addition theorem for `P7` on the unit sphere. -/
+theorem P7_addition (x y : EuclideanSpace ℝ (Fin 3)) (hx : ‖x‖ = 1) (hy : ‖y‖ = 1) :
+    (429 * ⟪x, y⟫ ^ 7 - 693 * ⟪x, y⟫ ^ 5 + 315 * ⟪x, y⟫ ^ 3 - 35 * ⟪x, y⟫) / 16
+      = (1/256) * (h7_0 (x 0) (x 1) (x 2) * h7_0 (y 0) (y 1) (y 2))
+      + (7/1024) * (h7_1 (x 0) (x 1) (x 2) * h7_1 (y 0) (y 1) (y 2))
+      + (7/1024) * (h7_2 (x 0) (x 1) (x 2) * h7_2 (y 0) (y 1) (y 2))
+      + (21/512) * (h7_3 (x 0) (x 1) (x 2) * h7_3 (y 0) (y 1) (y 2))
+      + (21/128) * (h7_4 (x 0) (x 1) (x 2) * h7_4 (y 0) (y 1) (y 2))
+      + (21/1024) * (h7_5 (x 0) (x 1) (x 2) * h7_5 (y 0) (y 1) (y 2))
+      + (21/1024) * (h7_6 (x 0) (x 1) (x 2) * h7_6 (y 0) (y 1) (y 2))
+      + (231/256) * (h7_7 (x 0) (x 1) (x 2) * h7_7 (y 0) (y 1) (y 2))
+      + (231/16) * (h7_8 (x 0) (x 1) (x 2) * h7_8 (y 0) (y 1) (y 2))
+      + (231/1024) * (h7_9 (x 0) (x 1) (x 2) * h7_9 (y 0) (y 1) (y 2))
+      + (231/1024) * (h7_10 (x 0) (x 1) (x 2) * h7_10 (y 0) (y 1) (y 2))
+      + (3003/512) * (h7_11 (x 0) (x 1) (x 2) * h7_11 (y 0) (y 1) (y 2))
+      + (3003/128) * (h7_12 (x 0) (x 1) (x 2) * h7_12 (y 0) (y 1) (y 2))
+      + (429/1024) * (h7_13 (x 0) (x 1) (x 2) * h7_13 (y 0) (y 1) (y 2))
+      + (429/1024) * (h7_14 (x 0) (x 1) (x 2) * h7_14 (y 0) (y 1) (y 2)) := by
+  have hx' := normsq_coords x hx
+  have hy' := normsq_coords y hy
+  have h := zonal7_hom (x 0) (x 1) (x 2) (y 0) (y 1) (y 2)
+  rw [hx', hy'] at h
+  rw [inner_coords]
+  linear_combination h
+
+/-- Schoenberg positivity in degree 7. -/
+theorem sum_P7_nonneg {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) (hx : OnSphere x) :
+    0 ≤ ∑ i, ∑ j, (429 * ⟪x i, x j⟫ ^ 7 - 693 * ⟪x i, x j⟫ ^ 5 + 315 * ⟪x i, x j⟫ ^ 3 - 35 * ⟪x i, x j⟫) / 16 := by
+  have step : ∑ i, ∑ j, (429 * ⟪x i, x j⟫ ^ 7 - 693 * ⟪x i, x j⟫ ^ 5 + 315 * ⟪x i, x j⟫ ^ 3 - 35 * ⟪x i, x j⟫) / 16
+      = ∑ i, ∑ j, ((1/256) * (h7_0 (x i 0) (x i 1) (x i 2) * h7_0 (x j 0) (x j 1) (x j 2))
+        + (7/1024) * (h7_1 (x i 0) (x i 1) (x i 2) * h7_1 (x j 0) (x j 1) (x j 2))
+        + (7/1024) * (h7_2 (x i 0) (x i 1) (x i 2) * h7_2 (x j 0) (x j 1) (x j 2))
+        + (21/512) * (h7_3 (x i 0) (x i 1) (x i 2) * h7_3 (x j 0) (x j 1) (x j 2))
+        + (21/128) * (h7_4 (x i 0) (x i 1) (x i 2) * h7_4 (x j 0) (x j 1) (x j 2))
+        + (21/1024) * (h7_5 (x i 0) (x i 1) (x i 2) * h7_5 (x j 0) (x j 1) (x j 2))
+        + (21/1024) * (h7_6 (x i 0) (x i 1) (x i 2) * h7_6 (x j 0) (x j 1) (x j 2))
+        + (231/256) * (h7_7 (x i 0) (x i 1) (x i 2) * h7_7 (x j 0) (x j 1) (x j 2))
+        + (231/16) * (h7_8 (x i 0) (x i 1) (x i 2) * h7_8 (x j 0) (x j 1) (x j 2))
+        + (231/1024) * (h7_9 (x i 0) (x i 1) (x i 2) * h7_9 (x j 0) (x j 1) (x j 2))
+        + (231/1024) * (h7_10 (x i 0) (x i 1) (x i 2) * h7_10 (x j 0) (x j 1) (x j 2))
+        + (3003/512) * (h7_11 (x i 0) (x i 1) (x i 2) * h7_11 (x j 0) (x j 1) (x j 2))
+        + (3003/128) * (h7_12 (x i 0) (x i 1) (x i 2) * h7_12 (x j 0) (x j 1) (x j 2))
+        + (429/1024) * (h7_13 (x i 0) (x i 1) (x i 2) * h7_13 (x j 0) (x j 1) (x j 2))
+        + (429/1024) * (h7_14 (x i 0) (x i 1) (x i 2) * h7_14 (x j 0) (x j 1) (x j 2))) :=
+    Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun j _ =>
+      P7_addition (x i) (x j) (hx i) (hx j)
+  rw [step]
+  simp only [Finset.sum_add_distrib, sum_gram_eq]
+  positivity
+
+/-! ### The degree-7 Yudin polynomial
+
+Touching distances `49/40`, `8/5`, `47/25` (rational stand-ins for the true contact points
+`1.2335…`, `1.6128…`, `1.8710…`), imposed as exact double zeros of the slack. -/
+
+noncomputable def yudinF7 (t : ℝ) : ℝ :=
+  (676113793281934502048940645604961225/957432771398587384241118321039853056) + (332875947100292256975895387654204230625/944986145370405748245983782866334966272) * t ^ 1 + (3790767407945690693738291645363757940625/12954185076119312132205361023459341829312) * t ^ 2 + (48985300088925628109141585916316319140625/181358591065670369850875054328430785610368) * t ^ 3 + (18520941844947477382393985389648437500/29754143846711545053659188600758175764201) * t ^ 4 + (-381631562416090375000000000000000000000/1416863992700549764459961361940865512581) * t ^ 5 + (4961210311409174875000000000000000000000/29754143846711545053659188600758175764201) * t ^ 7
+
+/-- Legendre expansion of `yudinF7`: the coefficients of `P₀,…,P₄` and `P₇` are all `≥ 0`. -/
+theorem yudinF7_legendre (t : ℝ) : yudinF7 t =
+    (1360645848206469402418048553218078275793675/1692680183279590118608167173732020665696768) * (1) + (2967131680522636226603919489095329522825625/6528909278364133314631501955823508281973248) * (t) + (144733766831280576117464496054404885959375/740547580184820676891073138507759041242336) * ((3 * t ^ 2 - 1) / 2) + (19639606735458937946703829671965300703125/332490750287062344726604266268789773619008) * ((5 * t ^ 3 - 3 * t) / 2) + (29633506951915963811830376623437500000/208279006926980815375614320205307230349407) * ((35 * t ^ 4 - 30 * t ^ 2 + 3) / 8) + (6106104998657446000000000000000000000000/981886746941480986770753223825019800218633) * ((429 * t ^ 7 - 693 * t ^ 5 + 315 * t ^ 3 - 35 * t) / 16) := by
+  unfold yudinF7; ring
+
+/-- `f(1 - s²/2) ≤ 1/s`: the slack factors as three exact double zeros times a cubic-and-higher
+polynomial with positive coefficients. -/
+theorem yudinF7_le_inv {s : ℝ} (hs : 0 < s) : yudinF7 (1 - s ^ 2 / 2) ≤ s⁻¹ := by
+  have key : 1 - s * yudinF7 (1 - s ^ 2 / 2)
+      = (s - 49/40) ^ 2 * (s - 8/5) ^ 2 * (s - 47/25) ^ 2
+        * ((390625/5303809) + (85106932845794606364928161316740892578125/476066301547384720858547017612130812227216) * s ^ 1 + (54906117394575251599969302569430810546875/238033150773692360429273508806065406113608) * s ^ 2 + (11989245465455422521531742958587158203125/52896255727487191206505224179125645803024) * s ^ 3 + (876557414679120971144378210882568359375/4250591978101649293379884085822596537743) * s ^ 4 + (734964063639931015916309768676757812500/4250591978101649293379884085822596537743) * s ^ 5 + (3371610640205401347383417480468750000000/29754143846711545053659188600758175764201) * s ^ 6 + (3469940258819581099096679687500000000/70340765595062754263969713004156443887) * s ^ 7 + (364726476799690121669921875000000000000/29754143846711545053659188600758175764201) * s ^ 8 + (38759455557884178710937500000000000000/29754143846711545053659188600758175764201) * s ^ 9) := by
+    unfold yudinF7; ring
+  have hq : 0 ≤ (s - 49/40) ^ 2 * (s - 8/5) ^ 2 * (s - 47/25) ^ 2
+        * ((390625/5303809) + (85106932845794606364928161316740892578125/476066301547384720858547017612130812227216) * s ^ 1 + (54906117394575251599969302569430810546875/238033150773692360429273508806065406113608) * s ^ 2 + (11989245465455422521531742958587158203125/52896255727487191206505224179125645803024) * s ^ 3 + (876557414679120971144378210882568359375/4250591978101649293379884085822596537743) * s ^ 4 + (734964063639931015916309768676757812500/4250591978101649293379884085822596537743) * s ^ 5 + (3371610640205401347383417480468750000000/29754143846711545053659188600758175764201) * s ^ 6 + (3469940258819581099096679687500000000/70340765595062754263969713004156443887) * s ^ 7 + (364726476799690121669921875000000000000/29754143846711545053659188600758175764201) * s ^ 8 + (38759455557884178710937500000000000000/29754143846711545053659188600758175764201) * s ^ 9) := by positivity
+  rw [← one_div, le_div_iff₀ hs]
+  linarith
+
+/-- **Yudin's bound, degree 7.**  Every admissible 8-point configuration has energy at least
+`19.6462249`. -/
+theorem energy_ge_yudin7 (x : Fin 8 → EuclideanSpace ℝ (Fin 3)) (hx : Admissible x) :
+    (9352905642547650287729263358126768492479175/476066301547384720858547017612130812227216 : ℝ) ≤ energy x := by
+  obtain ⟨hsph, hinj⟩ := hx
+  have hterm : ∀ i j : Fin 8, i ≠ j → yudinF7 ⟪x i, x j⟫ ≤ ‖x i - x j‖⁻¹ := by
+    intro i j hij
+    have hne : x i - x j ≠ 0 := sub_ne_zero.mpr (fun h => hij (hinj h))
+    have hpos : 0 < ‖x i - x j‖ := norm_pos_iff.mpr hne
+    rw [inner_eq_of_norm _ _ (hsph i) (hsph j)]
+    exact yudinF7_le_inv hpos
+  have hdiag : ∀ i : Fin 8, yudinF7 ⟪x i, x i⟫ = yudinF7 1 := by
+    intro i; rw [real_inner_self_eq_norm_sq, hsph i]; norm_num
+  have hsplit : ∑ i, ∑ j, yudinF7 ⟪x i, x j⟫
+      = ∑ i, yudinF7 ⟪x i, x i⟫ + ∑ i, ∑ j ∈ univ.erase i, yudinF7 ⟪x i, x j⟫ := by
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [← Finset.add_sum_erase _ _ (Finset.mem_univ i)]
+  have hoff : ∑ i, ∑ j ∈ univ.erase i, yudinF7 ⟪x i, x j⟫
+      ≤ ∑ i, ∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹ :=
+    Finset.sum_le_sum fun i _ => Finset.sum_le_sum fun j hj =>
+      hterm i j (Finset.ne_of_mem_erase hj).symm
+  have hupper : ∑ i, ∑ j, yudinF7 ⟪x i, x j⟫ ≤ 8 * yudinF7 1 + 2 * energy x := by
+    rw [hsplit, energy_eq_half]
+    simp only [hdiag, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    push_cast
+    linarith
+  have hlower : (64 : ℝ) * (1360645848206469402418048553218078275793675/1692680183279590118608167173732020665696768) ≤ ∑ i, ∑ j, yudinF7 ⟪x i, x j⟫ := by
+    simp only [yudinF7_legendre, Finset.sum_add_distrib, ← Finset.mul_sum, Finset.sum_const,
+      Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    have h1 := sum_P1_nonneg x
+    have h2 := sum_P2_nonneg x hsph
+    have h3 := sum_P3_nonneg x hsph
+    have h4 := sum_P4_nonneg x hsph
+    have h7 := sum_P7_nonneg x hsph
+    push_cast
+    linarith
+  have hf1 : yudinF7 1 = 136359877934451180935869561895796775/89759322318617567272604842597486224 := by unfold yudinF7; norm_num
+  rw [hf1] at hupper
+  linarith
+
+/-- The improved rigorous lower bound: `19.6462 < thomsonInf 8`. -/
+theorem thomsonInf_ge_yudin7 : (9352905642547650287729263358126768492479175/476066301547384720858547017612130812227216 : ℝ) ≤ thomsonInf 8 := by
+  obtain ⟨x₀, hx₀⟩ := exists_admissible 8
+  refine le_csInf ⟨_, x₀, hx₀, rfl⟩ ?_
+  rintro e ⟨x, hx, rfl⟩
+  exact energy_ge_yudin7 x hx
+
+theorem thomsonInf_gt' : (19.6462 : ℝ) < thomsonInf 8 :=
+  lt_of_lt_of_le (by norm_num) thomsonInf_ge_yudin7
+
+/-! ### Degree 12: the linear-programming method at its ceiling
+
+The optimal Yudin polynomial for `N = 8` is supported on `P₀,P₁,P₂,P₃,P₇,P₁₂` and gives
+`19.6478`; this section proves `19.6475`, within `0.0003` of the method's exact optimum.  Two
+things change from §13.  Positivity now needs `P₁₂`, whose `25` harmonics make the `ring`
+identity large but still routine.  And the slack polynomial, after its three double zeros are
+removed, no longer has positive coefficients: it is positive on the range of possible
+distances but not beyond it.  It is therefore certified in the **Bernstein basis** of `[0,2]`,
+which is exactly the interval of chord lengths on the unit sphere. -/
+
+noncomputable def h12_0 (a b c : ℝ) : ℝ := 231*a^12 + 1386*a^10*b^2 - 16632*a^10*c^2 + 3465*a^8*b^4 - 83160*a^8*b^2*c^2 + 138600*a^8*c^4 + 4620*a^6*b^6 - 166320*a^6*b^4*c^2 + 554400*a^6*b^2*c^4 - 295680*a^6*c^6 + 3465*a^4*b^8 - 166320*a^4*b^6*c^2 + 831600*a^4*b^4*c^4 - 887040*a^4*b^2*c^6 + 190080*a^4*c^8 + 1386*a^2*b^10 - 83160*a^2*b^8*c^2 + 554400*a^2*b^6*c^4 - 887040*a^2*b^4*c^6 + 380160*a^2*b^2*c^8 - 33792*a^2*c^10 + 231*b^12 - 16632*b^10*c^2 + 138600*b^8*c^4 - 295680*b^6*c^6 + 190080*b^4*c^8 - 33792*b^2*c^10 + 1024*c^12
+noncomputable def h12_1 (a b c : ℝ) : ℝ := 231*a^11*c + 1155*a^9*b^2*c - 4620*a^9*c^3 + 2310*a^7*b^4*c - 18480*a^7*b^2*c^3 + 18480*a^7*c^5 + 2310*a^5*b^6*c - 27720*a^5*b^4*c^3 + 55440*a^5*b^2*c^5 - 21120*a^5*c^7 + 1155*a^3*b^8*c - 18480*a^3*b^6*c^3 + 55440*a^3*b^4*c^5 - 42240*a^3*b^2*c^7 + 7040*a^3*c^9 + 231*a*b^10*c - 4620*a*b^8*c^3 + 18480*a*b^6*c^5 - 21120*a*b^4*c^7 + 7040*a*b^2*c^9 - 512*a*c^11
+noncomputable def h12_2 (a b c : ℝ) : ℝ := 231*a^10*b*c + 1155*a^8*b^3*c - 4620*a^8*b*c^3 + 2310*a^6*b^5*c - 18480*a^6*b^3*c^3 + 18480*a^6*b*c^5 + 2310*a^4*b^7*c - 27720*a^4*b^5*c^3 + 55440*a^4*b^3*c^5 - 21120*a^4*b*c^7 + 1155*a^2*b^9*c - 18480*a^2*b^7*c^3 + 55440*a^2*b^5*c^5 - 42240*a^2*b^3*c^7 + 7040*a^2*b*c^9 + 231*b^11*c - 4620*b^9*c^3 + 18480*b^7*c^5 - 21120*b^5*c^7 + 7040*b^3*c^9 - 512*b*c^11
+noncomputable def h12_3 (a b c : ℝ) : ℝ := 3*a^12 + 12*a^10*b^2 - 210*a^10*c^2 + 15*a^8*b^4 - 630*a^8*b^2*c^2 + 1680*a^8*c^4 - 420*a^6*b^4*c^2 + 3360*a^6*b^2*c^4 - 3360*a^6*c^6 - 15*a^4*b^8 + 420*a^4*b^6*c^2 - 3360*a^4*b^2*c^6 + 1920*a^4*c^8 - 12*a^2*b^10 + 630*a^2*b^8*c^2 - 3360*a^2*b^6*c^4 + 3360*a^2*b^4*c^6 - 256*a^2*c^10 - 3*b^12 + 210*b^10*c^2 - 1680*b^8*c^4 + 3360*b^6*c^6 - 1920*b^4*c^8 + 256*b^2*c^10
+noncomputable def h12_4 (a b c : ℝ) : ℝ := 3*a^11*b + 15*a^9*b^3 - 210*a^9*b*c^2 + 30*a^7*b^5 - 840*a^7*b^3*c^2 + 1680*a^7*b*c^4 + 30*a^5*b^7 - 1260*a^5*b^5*c^2 + 5040*a^5*b^3*c^4 - 3360*a^5*b*c^6 + 15*a^3*b^9 - 840*a^3*b^7*c^2 + 5040*a^3*b^5*c^4 - 6720*a^3*b^3*c^6 + 1920*a^3*b*c^8 + 3*a*b^11 - 210*a*b^9*c^2 + 1680*a*b^7*c^4 - 3360*a*b^5*c^6 + 1920*a*b^3*c^8 - 256*a*b*c^10
+noncomputable def h12_5 (a b c : ℝ) : ℝ := 45*a^11*c + 45*a^9*b^2*c - 840*a^9*c^3 - 270*a^7*b^4*c + 3024*a^7*c^5 - 630*a^5*b^6*c + 5040*a^5*b^4*c^3 - 3024*a^5*b^2*c^5 - 2880*a^5*c^7 - 495*a^3*b^8*c + 6720*a^3*b^6*c^3 - 15120*a^3*b^4*c^5 + 5760*a^3*b^2*c^7 + 640*a^3*c^9 - 135*a*b^10*c + 2520*a*b^8*c^3 - 9072*a*b^6*c^5 + 8640*a*b^4*c^7 - 1920*a*b^2*c^9
+noncomputable def h12_6 (a b c : ℝ) : ℝ := 135*a^10*b*c + 495*a^8*b^3*c - 2520*a^8*b*c^3 + 630*a^6*b^5*c - 6720*a^6*b^3*c^3 + 9072*a^6*b*c^5 + 270*a^4*b^7*c - 5040*a^4*b^5*c^3 + 15120*a^4*b^3*c^5 - 8640*a^4*b*c^7 - 45*a^2*b^9*c + 3024*a^2*b^5*c^5 - 5760*a^2*b^3*c^7 + 1920*a^2*b*c^9 - 45*b^11*c + 840*b^9*c^3 - 3024*b^7*c^5 + 2880*b^5*c^7 - 640*b^3*c^9
+noncomputable def h12_7 (a b c : ℝ) : ℝ := 5*a^12 - 10*a^10*b^2 - 320*a^10*c^2 - 85*a^8*b^4 + 960*a^8*b^2*c^2 + 2240*a^8*c^4 - 140*a^6*b^6 + 4480*a^6*b^4*c^2 - 8960*a^6*b^2*c^4 - 3584*a^6*c^6 - 85*a^4*b^8 + 4480*a^4*b^6*c^2 - 22400*a^4*b^4*c^4 + 17920*a^4*b^2*c^6 + 1280*a^4*c^8 - 10*a^2*b^10 + 960*a^2*b^8*c^2 - 8960*a^2*b^6*c^4 + 17920*a^2*b^4*c^6 - 7680*a^2*b^2*c^8 + 5*b^12 - 320*b^10*c^2 + 2240*b^8*c^4 - 3584*b^6*c^6 + 1280*b^4*c^8
+noncomputable def h12_8 (a b c : ℝ) : ℝ := 5*a^11*b + 15*a^9*b^3 - 320*a^9*b*c^2 + 10*a^7*b^5 - 640*a^7*b^3*c^2 + 2240*a^7*b*c^4 - 10*a^5*b^7 + 2240*a^5*b^3*c^4 - 3584*a^5*b*c^6 - 15*a^3*b^9 + 640*a^3*b^7*c^2 - 2240*a^3*b^5*c^4 + 1280*a^3*b*c^8 - 5*a*b^11 + 320*a*b^9*c^2 - 2240*a*b^7*c^4 + 3584*a*b^5*c^6 - 1280*a*b^3*c^8
+noncomputable def h12_9 (a b c : ℝ) : ℝ := 5*a^11*c - 35*a^9*b^2*c - 80*a^9*c^3 - 110*a^7*b^4*c + 640*a^7*b^2*c^3 + 224*a^7*c^5 - 70*a^5*b^6*c + 1120*a^5*b^4*c^3 - 2016*a^5*b^2*c^5 - 128*a^5*c^7 + 25*a^3*b^8*c - 1120*a^3*b^4*c^5 + 1280*a^3*b^2*c^7 + 25*a*b^10*c - 400*a*b^8*c^3 + 1120*a*b^6*c^5 - 640*a*b^4*c^7
+noncomputable def h12_10 (a b c : ℝ) : ℝ := 25*a^10*b*c + 25*a^8*b^3*c - 400*a^8*b*c^3 - 70*a^6*b^5*c + 1120*a^6*b*c^5 - 110*a^4*b^7*c + 1120*a^4*b^5*c^3 - 1120*a^4*b^3*c^5 - 640*a^4*b*c^7 - 35*a^2*b^9*c + 640*a^2*b^7*c^3 - 2016*a^2*b^5*c^5 + 1280*a^2*b^3*c^7 + 5*b^11*c - 80*b^9*c^3 + 224*b^7*c^5 - 128*b^5*c^7
+noncomputable def h12_11 (a b c : ℝ) : ℝ := 5*a^12 - 60*a^10*b^2 - 270*a^10*c^2 - 135*a^8*b^4 + 3510*a^8*b^2*c^2 + 1440*a^8*c^4 + 3780*a^6*b^4*c^2 - 20160*a^6*b^2*c^4 - 1344*a^6*c^6 + 135*a^4*b^8 - 3780*a^4*b^6*c^2 + 20160*a^4*b^2*c^6 + 60*a^2*b^10 - 3510*a^2*b^8*c^2 + 20160*a^2*b^6*c^4 - 20160*a^2*b^4*c^6 - 5*b^12 + 270*b^10*c^2 - 1440*b^8*c^4 + 1344*b^6*c^6
+noncomputable def h12_12 (a b c : ℝ) : ℝ := 15*a^11*b - 5*a^9*b^3 - 810*a^9*b*c^2 - 90*a^7*b^5 + 1080*a^7*b^3*c^2 + 4320*a^7*b*c^4 - 90*a^5*b^7 + 3780*a^5*b^5*c^2 - 10080*a^5*b^3*c^4 - 4032*a^5*b*c^6 - 5*a^3*b^9 + 1080*a^3*b^7*c^2 - 10080*a^3*b^5*c^4 + 13440*a^3*b^3*c^6 + 15*a*b^11 - 810*a*b^9*c^2 + 4320*a*b^7*c^4 - 4032*a*b^5*c^6
+noncomputable def h12_13 (a b c : ℝ) : ℝ := 5*a^11*c - 95*a^9*b^2*c - 60*a^9*c^3 - 30*a^7*b^4*c + 1200*a^7*b^2*c^3 + 96*a^7*c^5 + 210*a^5*b^6*c - 840*a^5*b^4*c^3 - 2016*a^5*b^2*c^5 + 105*a^3*b^8*c - 1680*a^3*b^6*c^3 + 3360*a^3*b^4*c^5 - 35*a*b^10*c + 420*a*b^8*c^3 - 672*a*b^6*c^5
+noncomputable def h12_14 (a b c : ℝ) : ℝ := 35*a^10*b*c - 105*a^8*b^3*c - 420*a^8*b*c^3 - 210*a^6*b^5*c + 1680*a^6*b^3*c^3 + 672*a^6*b*c^5 + 30*a^4*b^7*c + 840*a^4*b^5*c^3 - 3360*a^4*b^3*c^5 + 95*a^2*b^9*c - 1200*a^2*b^7*c^3 + 2016*a^2*b^5*c^5 - 5*b^11*c + 60*b^9*c^3 - 96*b^7*c^5
+noncomputable def h12_15 (a b c : ℝ) : ℝ := a^12 - 26*a^10*b^2 - 40*a^10*c^2 + 15*a^8*b^4 + 1080*a^8*b^2*c^2 + 120*a^8*c^4 + 84*a^6*b^6 - 1680*a^6*b^4*c^2 - 3360*a^6*b^2*c^4 + 15*a^4*b^8 - 1680*a^4*b^6*c^2 + 8400*a^4*b^4*c^4 - 26*a^2*b^10 + 1080*a^2*b^8*c^2 - 3360*a^2*b^6*c^4 + b^12 - 40*b^10*c^2 + 120*b^8*c^4
+noncomputable def h12_16 (a b c : ℝ) : ℝ := a^11*b - 5*a^9*b^3 - 40*a^9*b*c^2 - 6*a^7*b^5 + 240*a^7*b^3*c^2 + 120*a^7*b*c^4 + 6*a^5*b^7 - 840*a^5*b^3*c^4 + 5*a^3*b^9 - 240*a^3*b^7*c^2 + 840*a^3*b^5*c^4 - a*b^11 + 40*a*b^9*c^2 - 120*a*b^7*c^4
+noncomputable def h12_17 (a b c : ℝ) : ℝ := 3*a^11*c - 105*a^9*b^2*c - 20*a^9*c^3 + 270*a^7*b^4*c + 720*a^7*b^2*c^3 + 126*a^5*b^6*c - 2520*a^5*b^4*c^3 - 225*a^3*b^8*c + 1680*a^3*b^6*c^3 + 27*a*b^10*c - 180*a*b^8*c^3
+noncomputable def h12_18 (a b c : ℝ) : ℝ := 27*a^10*b*c - 225*a^8*b^3*c - 180*a^8*b*c^3 + 126*a^6*b^5*c + 1680*a^6*b^3*c^3 + 270*a^4*b^7*c - 2520*a^4*b^5*c^3 - 105*a^2*b^9*c + 720*a^2*b^7*c^3 + 3*b^11*c - 20*b^9*c^3
+noncomputable def h12_19 (a b c : ℝ) : ℝ := a^12 - 44*a^10*b^2 - 22*a^10*c^2 + 165*a^8*b^4 + 990*a^8*b^2*c^2 - 4620*a^6*b^4*c^2 - 165*a^4*b^8 + 4620*a^4*b^6*c^2 + 44*a^2*b^10 - 990*a^2*b^8*c^2 - b^12 + 22*b^10*c^2
+noncomputable def h12_20 (a b c : ℝ) : ℝ := 5*a^11*b - 55*a^9*b^3 - 110*a^9*b*c^2 + 66*a^7*b^5 + 1320*a^7*b^3*c^2 + 66*a^5*b^7 - 2772*a^5*b^5*c^2 - 55*a^3*b^9 + 1320*a^3*b^7*c^2 + 5*a*b^11 - 110*a*b^9*c^2
+noncomputable def h12_21 (a b c : ℝ) : ℝ := a^11*c - 55*a^9*b^2*c + 330*a^7*b^4*c - 462*a^5*b^6*c + 165*a^3*b^8*c - 11*a*b^10*c
+noncomputable def h12_22 (a b c : ℝ) : ℝ := 11*a^10*b*c - 165*a^8*b^3*c + 462*a^6*b^5*c - 330*a^4*b^7*c + 55*a^2*b^9*c - b^11*c
+noncomputable def h12_23 (a b c : ℝ) : ℝ := a^12 - 66*a^10*b^2 + 495*a^8*b^4 - 924*a^6*b^6 + 495*a^4*b^8 - 66*a^2*b^10 + b^12
+noncomputable def h12_24 (a b c : ℝ) : ℝ := 3*a^11*b - 55*a^9*b^3 + 198*a^7*b^5 - 198*a^5*b^7 + 55*a^3*b^9 - 3*a*b^11
+
+set_option maxHeartbeats 4000000 in
+/-- The homogeneous zonal identity in degree 12. -/
+theorem zonal12_hom (a b c u v w : ℝ) :
+    (231/1024) * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) ^ 6 + (-9009/512) * (a * u + b * v + c * w) ^ 2 * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) ^ 5 + (225225/1024) * (a * u + b * v + c * w) ^ 4 * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) ^ 4 + (-255255/256) * (a * u + b * v + c * w) ^ 6 * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) ^ 3 + (2078505/1024) * (a * u + b * v + c * w) ^ 8 * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) ^ 2 + (-969969/512) * (a * u + b * v + c * w) ^ 10 * ((a ^ 2 + b ^ 2 + c ^ 2) * (u ^ 2 + v ^ 2 + w ^ 2)) + (676039/1024) * (a * u + b * v + c * w) ^ 12
+      = (1/1048576) * (h12_0 a b c * h12_0 u v w)
+      + (39/131072) * (h12_1 a b c * h12_1 u v w)
+      + (39/131072) * (h12_2 a b c * h12_2 u v w)
+      + (3003/262144) * (h12_3 a b c * h12_3 u v w)
+      + (3003/65536) * (h12_4 a b c * h12_4 u v w)
+      + (1001/131072) * (h12_5 a b c * h12_5 u v w)
+      + (1001/131072) * (h12_6 a b c * h12_6 u v w)
+      + (9009/2097152) * (h12_7 a b c * h12_7 u v w)
+      + (9009/131072) * (h12_8 a b c * h12_8 u v w)
+      + (153153/262144) * (h12_9 a b c * h12_9 u v w)
+      + (153153/262144) * (h12_10 a b c * h12_10 u v w)
+      + (2431/524288) * (h12_11 a b c * h12_11 u v w)
+      + (2431/131072) * (h12_12 a b c * h12_12 u v w)
+      + (138567/262144) * (h12_13 a b c * h12_13 u v w)
+      + (138567/262144) * (h12_14 a b c * h12_14 u v w)
+      + (138567/1048576) * (h12_15 a b c * h12_15 u v w)
+      + (138567/16384) * (h12_16 a b c * h12_16 u v w)
+      + (323323/262144) * (h12_17 a b c * h12_17 u v w)
+      + (323323/262144) * (h12_18 a b c * h12_18 u v w)
+      + (88179/524288) * (h12_19 a b c * h12_19 u v w)
+      + (88179/131072) * (h12_20 a b c * h12_20 u v w)
+      + (2028117/262144) * (h12_21 a b c * h12_21 u v w)
+      + (2028117/262144) * (h12_22 a b c * h12_22 u v w)
+      + (676039/2097152) * (h12_23 a b c * h12_23 u v w)
+      + (676039/131072) * (h12_24 a b c * h12_24 u v w) := by
+  unfold h12_0 h12_1 h12_2 h12_3 h12_4 h12_5 h12_6 h12_7 h12_8 h12_9 h12_10 h12_11 h12_12 h12_13 h12_14 h12_15 h12_16 h12_17 h12_18 h12_19 h12_20 h12_21 h12_22 h12_23 h12_24
+  ring
+
+set_option maxHeartbeats 1000000 in
+/-- Addition theorem for `P₁₂` on the unit sphere. -/
+theorem P12_addition (x y : EuclideanSpace ℝ (Fin 3)) (hx : ‖x‖ = 1) (hy : ‖y‖ = 1) :
+    (676039 * ⟪x, y⟫ ^ 12 - 1939938 * ⟪x, y⟫ ^ 10 + 2078505 * ⟪x, y⟫ ^ 8 - 1021020 * ⟪x, y⟫ ^ 6 + 225225 * ⟪x, y⟫ ^ 4 - 18018 * ⟪x, y⟫ ^ 2 + 231) / 1024
+      = (1/1048576) * (h12_0 (x 0) (x 1) (x 2) * h12_0 (y 0) (y 1) (y 2))
+      + (39/131072) * (h12_1 (x 0) (x 1) (x 2) * h12_1 (y 0) (y 1) (y 2))
+      + (39/131072) * (h12_2 (x 0) (x 1) (x 2) * h12_2 (y 0) (y 1) (y 2))
+      + (3003/262144) * (h12_3 (x 0) (x 1) (x 2) * h12_3 (y 0) (y 1) (y 2))
+      + (3003/65536) * (h12_4 (x 0) (x 1) (x 2) * h12_4 (y 0) (y 1) (y 2))
+      + (1001/131072) * (h12_5 (x 0) (x 1) (x 2) * h12_5 (y 0) (y 1) (y 2))
+      + (1001/131072) * (h12_6 (x 0) (x 1) (x 2) * h12_6 (y 0) (y 1) (y 2))
+      + (9009/2097152) * (h12_7 (x 0) (x 1) (x 2) * h12_7 (y 0) (y 1) (y 2))
+      + (9009/131072) * (h12_8 (x 0) (x 1) (x 2) * h12_8 (y 0) (y 1) (y 2))
+      + (153153/262144) * (h12_9 (x 0) (x 1) (x 2) * h12_9 (y 0) (y 1) (y 2))
+      + (153153/262144) * (h12_10 (x 0) (x 1) (x 2) * h12_10 (y 0) (y 1) (y 2))
+      + (2431/524288) * (h12_11 (x 0) (x 1) (x 2) * h12_11 (y 0) (y 1) (y 2))
+      + (2431/131072) * (h12_12 (x 0) (x 1) (x 2) * h12_12 (y 0) (y 1) (y 2))
+      + (138567/262144) * (h12_13 (x 0) (x 1) (x 2) * h12_13 (y 0) (y 1) (y 2))
+      + (138567/262144) * (h12_14 (x 0) (x 1) (x 2) * h12_14 (y 0) (y 1) (y 2))
+      + (138567/1048576) * (h12_15 (x 0) (x 1) (x 2) * h12_15 (y 0) (y 1) (y 2))
+      + (138567/16384) * (h12_16 (x 0) (x 1) (x 2) * h12_16 (y 0) (y 1) (y 2))
+      + (323323/262144) * (h12_17 (x 0) (x 1) (x 2) * h12_17 (y 0) (y 1) (y 2))
+      + (323323/262144) * (h12_18 (x 0) (x 1) (x 2) * h12_18 (y 0) (y 1) (y 2))
+      + (88179/524288) * (h12_19 (x 0) (x 1) (x 2) * h12_19 (y 0) (y 1) (y 2))
+      + (88179/131072) * (h12_20 (x 0) (x 1) (x 2) * h12_20 (y 0) (y 1) (y 2))
+      + (2028117/262144) * (h12_21 (x 0) (x 1) (x 2) * h12_21 (y 0) (y 1) (y 2))
+      + (2028117/262144) * (h12_22 (x 0) (x 1) (x 2) * h12_22 (y 0) (y 1) (y 2))
+      + (676039/2097152) * (h12_23 (x 0) (x 1) (x 2) * h12_23 (y 0) (y 1) (y 2))
+      + (676039/131072) * (h12_24 (x 0) (x 1) (x 2) * h12_24 (y 0) (y 1) (y 2)) := by
+  have hx' := normsq_coords x hx
+  have hy' := normsq_coords y hy
+  have h := zonal12_hom (x 0) (x 1) (x 2) (y 0) (y 1) (y 2)
+  rw [hx', hy'] at h
+  rw [inner_coords]
+  linear_combination h
+
+set_option maxHeartbeats 1000000 in
+/-- Schoenberg positivity in degree 12. -/
+theorem sum_P12_nonneg {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) (hx : OnSphere x) :
+    0 ≤ ∑ i, ∑ j, (676039 * ⟪x i, x j⟫ ^ 12 - 1939938 * ⟪x i, x j⟫ ^ 10 + 2078505 * ⟪x i, x j⟫ ^ 8 - 1021020 * ⟪x i, x j⟫ ^ 6 + 225225 * ⟪x i, x j⟫ ^ 4 - 18018 * ⟪x i, x j⟫ ^ 2 + 231) / 1024 := by
+  have step : ∑ i, ∑ j, (676039 * ⟪x i, x j⟫ ^ 12 - 1939938 * ⟪x i, x j⟫ ^ 10 + 2078505 * ⟪x i, x j⟫ ^ 8 - 1021020 * ⟪x i, x j⟫ ^ 6 + 225225 * ⟪x i, x j⟫ ^ 4 - 18018 * ⟪x i, x j⟫ ^ 2 + 231) / 1024
+      = ∑ i, ∑ j, ((1/1048576) * (h12_0 (x i 0) (x i 1) (x i 2) * h12_0 (x j 0) (x j 1) (x j 2))
+        + (39/131072) * (h12_1 (x i 0) (x i 1) (x i 2) * h12_1 (x j 0) (x j 1) (x j 2))
+        + (39/131072) * (h12_2 (x i 0) (x i 1) (x i 2) * h12_2 (x j 0) (x j 1) (x j 2))
+        + (3003/262144) * (h12_3 (x i 0) (x i 1) (x i 2) * h12_3 (x j 0) (x j 1) (x j 2))
+        + (3003/65536) * (h12_4 (x i 0) (x i 1) (x i 2) * h12_4 (x j 0) (x j 1) (x j 2))
+        + (1001/131072) * (h12_5 (x i 0) (x i 1) (x i 2) * h12_5 (x j 0) (x j 1) (x j 2))
+        + (1001/131072) * (h12_6 (x i 0) (x i 1) (x i 2) * h12_6 (x j 0) (x j 1) (x j 2))
+        + (9009/2097152) * (h12_7 (x i 0) (x i 1) (x i 2) * h12_7 (x j 0) (x j 1) (x j 2))
+        + (9009/131072) * (h12_8 (x i 0) (x i 1) (x i 2) * h12_8 (x j 0) (x j 1) (x j 2))
+        + (153153/262144) * (h12_9 (x i 0) (x i 1) (x i 2) * h12_9 (x j 0) (x j 1) (x j 2))
+        + (153153/262144) * (h12_10 (x i 0) (x i 1) (x i 2) * h12_10 (x j 0) (x j 1) (x j 2))
+        + (2431/524288) * (h12_11 (x i 0) (x i 1) (x i 2) * h12_11 (x j 0) (x j 1) (x j 2))
+        + (2431/131072) * (h12_12 (x i 0) (x i 1) (x i 2) * h12_12 (x j 0) (x j 1) (x j 2))
+        + (138567/262144) * (h12_13 (x i 0) (x i 1) (x i 2) * h12_13 (x j 0) (x j 1) (x j 2))
+        + (138567/262144) * (h12_14 (x i 0) (x i 1) (x i 2) * h12_14 (x j 0) (x j 1) (x j 2))
+        + (138567/1048576) * (h12_15 (x i 0) (x i 1) (x i 2) * h12_15 (x j 0) (x j 1) (x j 2))
+        + (138567/16384) * (h12_16 (x i 0) (x i 1) (x i 2) * h12_16 (x j 0) (x j 1) (x j 2))
+        + (323323/262144) * (h12_17 (x i 0) (x i 1) (x i 2) * h12_17 (x j 0) (x j 1) (x j 2))
+        + (323323/262144) * (h12_18 (x i 0) (x i 1) (x i 2) * h12_18 (x j 0) (x j 1) (x j 2))
+        + (88179/524288) * (h12_19 (x i 0) (x i 1) (x i 2) * h12_19 (x j 0) (x j 1) (x j 2))
+        + (88179/131072) * (h12_20 (x i 0) (x i 1) (x i 2) * h12_20 (x j 0) (x j 1) (x j 2))
+        + (2028117/262144) * (h12_21 (x i 0) (x i 1) (x i 2) * h12_21 (x j 0) (x j 1) (x j 2))
+        + (2028117/262144) * (h12_22 (x i 0) (x i 1) (x i 2) * h12_22 (x j 0) (x j 1) (x j 2))
+        + (676039/2097152) * (h12_23 (x i 0) (x i 1) (x i 2) * h12_23 (x j 0) (x j 1) (x j 2))
+        + (676039/131072) * (h12_24 (x i 0) (x i 1) (x i 2) * h12_24 (x j 0) (x j 1) (x j 2))) :=
+    Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun j _ =>
+      P12_addition (x i) (x j) (hx i) (hx j)
+  rw [step]
+  simp only [Finset.sum_add_distrib, sum_gram_eq]
+  positivity
+
+/-- The degree-12 Yudin polynomial: touching distances `123/100`, `42/25`, `47/25`. -/
+noncomputable def yudinF12 (t : ℝ) : ℝ :=
+  (34645068691531042154161429510684749298607544489195322272041466068539910227765625/49042594187248903829211620825899122958892848689022009980306315505972859726406024) + (121397969730264244919756155254208481103532361460061701403801531927980619052734375/343298159310742326804481345781293860712249940823154069862144208541810018084842168) * t ^ 1 + (312374772044418065617314442366031033226600418895684974648770945614003515625000/1125040784258050696456633623815101603457747933409212775765453866944133954397891) * t ^ 2 + (50871775330122658859775838643323637494805158289110421515844282404445648193359375/200257259597933023969280785039088085415479132146839874086250788316055843882824598) * t ^ 3 + (31159373556544588444925716718750000000000000000000000000000000000000000000000/164414827256102646937012138784144569306633113421050799742406230144545027818411) * t ^ 4 + (-3332082262041546022264629574727978787525399392864665527343750000000000000000000/14304089971280930283520056074220577529677080867631419577589342022575417420201757) * t ^ 5 + (-423767480369006402850989747375000000000000000000000000000000000000000000000000/493244481768307940811036416352433707919899340263152399227218690433635083455233) * t ^ 6 + (43317069406540098289440184471463724237830192107240651855468750000000000000000000/300385889396899535953921177558632128123218698220259811129376182474083765824236897) * t ^ 7 + (2012895531752780413542201300031250000000000000000000000000000000000000000000000/1150903790792718528559084971489011985146431793947355598196843611011815194728877) * t ^ 8 + (-805158212701112165416880520012500000000000000000000000000000000000000000000000/493244481768307940811036416352433707919899340263152399227218690433635083455233) * t ^ 10 + (841756313278435445663102361831250000000000000000000000000000000000000000000000/1479733445304923822433109249057301123759698020789457197681656071300905250365699) * t ^ 12
+
+/-- Legendre expansion of `yudinF12`; all six coefficients are `≥ 0`. -/
+theorem yudinF12_legendre (t : ℝ) : yudinF12 t =
+    (25112058114515892702458371168699918546758419316915880412639437758263139355711703125/31240132497277551739207802466097741324814744614907020357455122977304711645720637288) * (1) + (3274994498117545420192398862664635048859126277705238295159568670423619001083984375/7209261345525588862894108261407171074957248757286235467105028379378010379781685528) * (t) + (58638878783256120377955532578228523914334874563431925487481228319292625781250000/300385889396899535953921177558632128123218698220259811129376182474083765824236897) * ((3 * t ^ 2 - 1) / 2) + (21756251352562735059934010323040099821071918911979203317348307096593475341796875/367138309262877210610348105904994823261711742269206435824793111912769047118511763) * ((5 * t ^ 3 - 3 * t) / 2) + (53313316192664736356234073195647660600406390285834648437500000000000000000000000/9912734350097684686479398859434860228066217041268573767269414021644764272199817601) * ((429 * t ^ 7 - 693 * t ^ 5 + 315 * t ^ 3 - 35 * t) / 16) + (116026176443278758427650668800000000000000000000000000000000000000000000000000/134655743522748067841412941664214402262132519891840604989030702488382377783278609) * ((676039 * t ^ 12 - 1939938 * t ^ 10 + 2078505 * t ^ 8 - 1021020 * t ^ 6 + 225225 * t ^ 4 - 18018 * t ^ 2 + 231) / 1024) := by
+  unfold yudinF12; ring
+
+set_option maxHeartbeats 1000000 in
+/-- `f(1 - s²/2) ≤ 1/s` on the range `0 < s ≤ 2` of chord lengths of the unit sphere.  The
+slack is three exact double zeros times a polynomial with nonnegative Bernstein coefficients
+on `[0,2]`. -/
+theorem yudinF12_le_inv {s : ℝ} (hs : 0 < s) (hs2 : s ≤ 2) : yudinF12 (1 - s ^ 2 / 2) ≤ s⁻¹ := by
+  have h0 : (0:ℝ) ≤ s := hs.le
+  have h2 : (0:ℝ) ≤ 2 - s := by linarith
+  have key : 1 - s * yudinF12 (1 - s ^ 2 / 2)
+      = (s - 123/100) ^ 2 * (s - 42/25) ^ 2 * (s - 47/25) ^ 2
+        * ((244140625/1978128094753456128) * s ^ 0 * (2 - s) ^ 29 + (37289677906352839707766236795615457861784921717939561665097117082635361083984375/8959358132913587991108802920667598005445181716053536759887552281996653762358471922024448) * s ^ 1 * (2 - s) ^ 28 + (456108105793725667230809235173665804366695675015843874423870850596656493408203125/6719518599685190993331602190500698504083886287040152569915664211497490321768853941518336) * s ^ 2 * (2 - s) ^ 27 + (28752308744941260157847453470479430278835686748127969607248157483321618716552734375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 3 * (2 - s) ^ 26 + (218735335703137768359238718927384640227428701685244486395797250162216077599365234375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 4 * (2 - s) ^ 25 + (2568024547432404009687984198937190553472879761557240663269200443093423159141845703125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 5 * (2 - s) ^ 24 + (1512922848820067616434089033596019173313771293589649760716530859658432780452880859375/10079277899527786489997403285751047756125829430560228854873496317246235482653280912277504) * s ^ 6 * (2 - s) ^ 23 + (11761600226135708579572572333582364721246668168854918884326577194974485389393310546875/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 7 * (2 - s) ^ 22 + (76853056210658041143616674013971695874210512224258446998173263547756731954117431640625/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 8 * (2 - s) ^ 21 + (142644011507664938229593385763397206687557385547107612803747736843042745304288330078125/26878074398740763973326408762002794016335545148160610279662656845989961287075415766073344) * s ^ 9 * (2 - s) ^ 20 + (256425101168404940909209146870294333332847532963119746535231168316296887568111572265625/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 10 * (2 - s) ^ 19 + (118521449385228368867125947336180844546279671398156395780329286082780476009996337890625/4479679066456793995554401460333799002722590858026768379943776140998326881179235961012224) * s ^ 11 * (2 - s) ^ 18 + (1937838023685690868481588427528966544718630474009838478100244095585982137947191162109375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 12 * (2 - s) ^ 17 + (883378792142592638104622203614817382228554341938866861955560251779782178983778076171875/11519174742317470274282746612286911721286662206354547262712567219709983408746606756888576) * s ^ 13 * (2 - s) ^ 16 + (543788789520584292230543434820897961847913202552280779304484997315843006921988525390625/5039638949763893244998701642875523878062914715280114427436748158623117741326640456138752) * s ^ 14 * (2 - s) ^ 15 + (193036746355081261395651848339356683912245593841103861211549353942143855931912841796875/1439896842789683784285343326535863965160832775794318407839070902463747926093325844611072) * s ^ 15 * (2 - s) ^ 14 + (281308265359987796262099751938493509949719976941174555034658543915825959978675537109375/1919862457052911712380457768714485286881110367725757877118761203284997234791101126148096) * s ^ 16 * (2 - s) ^ 13 + (11232575861451087995051549290282182210119284093011223612179179526217002295292423095703125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 17 * (2 - s) ^ 12 + (2275220104963855391883326390658632957422122083780309069012291961405251286338394775390625/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 18 * (2 - s) ^ 11 + (3044662147322738148614778138120859906275027683920506143991770623323435031176842041015625/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 19 * (2 - s) ^ 10 + (534890469678430299520309609025201886128304186002604371875564126144612092822386474609375/13439037199370381986663204381001397008167772574080305139831328422994980643537707883036672) * s ^ 20 * (2 - s) ^ 9 + (410681394390227195437583939465701807632773017027741070297585030446900568033468017578125/26878074398740763973326408762002794016335545148160610279662656845989961287075415766073344) * s ^ 21 * (2 - s) ^ 8 + (4067381476863596001452134674379364019579165103040722465328669496293971389388427734375/1119919766614198498888600365083449750680647714506692094985944035249581720294808990253056) * s ^ 22 * (2 - s) ^ 7 + (6642696536630242295946155163926156659030684141968179915212126609475168901268310546875/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 23 * (2 - s) ^ 6 + (332687517059150870823100158345704747236343106959177947078339161635839040506591796875/4479679066456793995554401460333799002722590858026768379943776140998326881179235961012224) * s ^ 24 * (2 - s) ^ 5 + (13014223708205767069589564222792650622896522921267955163856304723693893350212158203125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 25 * (2 - s) ^ 4 + (1974435313533393320681030312700939426847034025529546452363873345014212061161865234375/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 26 * (2 - s) ^ 3 + (1093438969609697795116914764070821825060846872986511166521222585180168304591552734375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 27 * (2 - s) ^ 2 + (11104928732293450705839171994612871054386917221917374591520167064464263427734375/3379189640274171985582902786271409858729638565270380975567344335678898829152051265536) * s ^ 28 * (2 - s) ^ 1 + (11013061617529695942994575376818078331234607076756341514198120083461181640625/136030216250604861471673062579408742472179853879318232693432614396499609224579383296) * s ^ 29 * (2 - s) ^ 0) := by
+    unfold yudinF12; ring
+  have hbern : (0:ℝ) ≤ (244140625/1978128094753456128) * s ^ 0 * (2 - s) ^ 29 + (37289677906352839707766236795615457861784921717939561665097117082635361083984375/8959358132913587991108802920667598005445181716053536759887552281996653762358471922024448) * s ^ 1 * (2 - s) ^ 28 + (456108105793725667230809235173665804366695675015843874423870850596656493408203125/6719518599685190993331602190500698504083886287040152569915664211497490321768853941518336) * s ^ 2 * (2 - s) ^ 27 + (28752308744941260157847453470479430278835686748127969607248157483321618716552734375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 3 * (2 - s) ^ 26 + (218735335703137768359238718927384640227428701685244486395797250162216077599365234375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 4 * (2 - s) ^ 25 + (2568024547432404009687984198937190553472879761557240663269200443093423159141845703125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 5 * (2 - s) ^ 24 + (1512922848820067616434089033596019173313771293589649760716530859658432780452880859375/10079277899527786489997403285751047756125829430560228854873496317246235482653280912277504) * s ^ 6 * (2 - s) ^ 23 + (11761600226135708579572572333582364721246668168854918884326577194974485389393310546875/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 7 * (2 - s) ^ 22 + (76853056210658041143616674013971695874210512224258446998173263547756731954117431640625/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 8 * (2 - s) ^ 21 + (142644011507664938229593385763397206687557385547107612803747736843042745304288330078125/26878074398740763973326408762002794016335545148160610279662656845989961287075415766073344) * s ^ 9 * (2 - s) ^ 20 + (256425101168404940909209146870294333332847532963119746535231168316296887568111572265625/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 10 * (2 - s) ^ 19 + (118521449385228368867125947336180844546279671398156395780329286082780476009996337890625/4479679066456793995554401460333799002722590858026768379943776140998326881179235961012224) * s ^ 11 * (2 - s) ^ 18 + (1937838023685690868481588427528966544718630474009838478100244095585982137947191162109375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 12 * (2 - s) ^ 17 + (883378792142592638104622203614817382228554341938866861955560251779782178983778076171875/11519174742317470274282746612286911721286662206354547262712567219709983408746606756888576) * s ^ 13 * (2 - s) ^ 16 + (543788789520584292230543434820897961847913202552280779304484997315843006921988525390625/5039638949763893244998701642875523878062914715280114427436748158623117741326640456138752) * s ^ 14 * (2 - s) ^ 15 + (193036746355081261395651848339356683912245593841103861211549353942143855931912841796875/1439896842789683784285343326535863965160832775794318407839070902463747926093325844611072) * s ^ 15 * (2 - s) ^ 14 + (281308265359987796262099751938493509949719976941174555034658543915825959978675537109375/1919862457052911712380457768714485286881110367725757877118761203284997234791101126148096) * s ^ 16 * (2 - s) ^ 13 + (11232575861451087995051549290282182210119284093011223612179179526217002295292423095703125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 17 * (2 - s) ^ 12 + (2275220104963855391883326390658632957422122083780309069012291961405251286338394775390625/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 18 * (2 - s) ^ 11 + (3044662147322738148614778138120859906275027683920506143991770623323435031176842041015625/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 19 * (2 - s) ^ 10 + (534890469678430299520309609025201886128304186002604371875564126144612092822386474609375/13439037199370381986663204381001397008167772574080305139831328422994980643537707883036672) * s ^ 20 * (2 - s) ^ 9 + (410681394390227195437583939465701807632773017027741070297585030446900568033468017578125/26878074398740763973326408762002794016335545148160610279662656845989961287075415766073344) * s ^ 21 * (2 - s) ^ 8 + (4067381476863596001452134674379364019579165103040722465328669496293971389388427734375/1119919766614198498888600365083449750680647714506692094985944035249581720294808990253056) * s ^ 22 * (2 - s) ^ 7 + (6642696536630242295946155163926156659030684141968179915212126609475168901268310546875/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 23 * (2 - s) ^ 6 + (332687517059150870823100158345704747236343106959177947078339161635839040506591796875/4479679066456793995554401460333799002722590858026768379943776140998326881179235961012224) * s ^ 24 * (2 - s) ^ 5 + (13014223708205767069589564222792650622896522921267955163856304723693893350212158203125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 25 * (2 - s) ^ 4 + (1974435313533393320681030312700939426847034025529546452363873345014212061161865234375/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 26 * (2 - s) ^ 3 + (1093438969609697795116914764070821825060846872986511166521222585180168304591552734375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 27 * (2 - s) ^ 2 + (11104928732293450705839171994612871054386917221917374591520167064464263427734375/3379189640274171985582902786271409858729638565270380975567344335678898829152051265536) * s ^ 28 * (2 - s) ^ 1 + (11013061617529695942994575376818078331234607076756341514198120083461181640625/136030216250604861471673062579408742472179853879318232693432614396499609224579383296) * s ^ 29 * (2 - s) ^ 0 := by
+    have e0 : (0:ℝ) ≤ (244140625/1978128094753456128) * s ^ 0 * (2 - s) ^ 29 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e1 : (0:ℝ) ≤ (37289677906352839707766236795615457861784921717939561665097117082635361083984375/8959358132913587991108802920667598005445181716053536759887552281996653762358471922024448) * s ^ 1 * (2 - s) ^ 28 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e2 : (0:ℝ) ≤ (456108105793725667230809235173665804366695675015843874423870850596656493408203125/6719518599685190993331602190500698504083886287040152569915664211497490321768853941518336) * s ^ 2 * (2 - s) ^ 27 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e3 : (0:ℝ) ≤ (28752308744941260157847453470479430278835686748127969607248157483321618716552734375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 3 * (2 - s) ^ 26 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e4 : (0:ℝ) ≤ (218735335703137768359238718927384640227428701685244486395797250162216077599365234375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 4 * (2 - s) ^ 25 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e5 : (0:ℝ) ≤ (2568024547432404009687984198937190553472879761557240663269200443093423159141845703125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 5 * (2 - s) ^ 24 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e6 : (0:ℝ) ≤ (1512922848820067616434089033596019173313771293589649760716530859658432780452880859375/10079277899527786489997403285751047756125829430560228854873496317246235482653280912277504) * s ^ 6 * (2 - s) ^ 23 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e7 : (0:ℝ) ≤ (11761600226135708579572572333582364721246668168854918884326577194974485389393310546875/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 7 * (2 - s) ^ 22 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e8 : (0:ℝ) ≤ (76853056210658041143616674013971695874210512224258446998173263547756731954117431640625/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 8 * (2 - s) ^ 21 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e9 : (0:ℝ) ≤ (142644011507664938229593385763397206687557385547107612803747736843042745304288330078125/26878074398740763973326408762002794016335545148160610279662656845989961287075415766073344) * s ^ 9 * (2 - s) ^ 20 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e10 : (0:ℝ) ≤ (256425101168404940909209146870294333332847532963119746535231168316296887568111572265625/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 10 * (2 - s) ^ 19 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e11 : (0:ℝ) ≤ (118521449385228368867125947336180844546279671398156395780329286082780476009996337890625/4479679066456793995554401460333799002722590858026768379943776140998326881179235961012224) * s ^ 11 * (2 - s) ^ 18 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e12 : (0:ℝ) ≤ (1937838023685690868481588427528966544718630474009838478100244095585982137947191162109375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 12 * (2 - s) ^ 17 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e13 : (0:ℝ) ≤ (883378792142592638104622203614817382228554341938866861955560251779782178983778076171875/11519174742317470274282746612286911721286662206354547262712567219709983408746606756888576) * s ^ 13 * (2 - s) ^ 16 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e14 : (0:ℝ) ≤ (543788789520584292230543434820897961847913202552280779304484997315843006921988525390625/5039638949763893244998701642875523878062914715280114427436748158623117741326640456138752) * s ^ 14 * (2 - s) ^ 15 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e15 : (0:ℝ) ≤ (193036746355081261395651848339356683912245593841103861211549353942143855931912841796875/1439896842789683784285343326535863965160832775794318407839070902463747926093325844611072) * s ^ 15 * (2 - s) ^ 14 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e16 : (0:ℝ) ≤ (281308265359987796262099751938493509949719976941174555034658543915825959978675537109375/1919862457052911712380457768714485286881110367725757877118761203284997234791101126148096) * s ^ 16 * (2 - s) ^ 13 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e17 : (0:ℝ) ≤ (11232575861451087995051549290282182210119284093011223612179179526217002295292423095703125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 17 * (2 - s) ^ 12 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e18 : (0:ℝ) ≤ (2275220104963855391883326390658632957422122083780309069012291961405251286338394775390625/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 18 * (2 - s) ^ 11 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e19 : (0:ℝ) ≤ (3044662147322738148614778138120859906275027683920506143991770623323435031176842041015625/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 19 * (2 - s) ^ 10 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e20 : (0:ℝ) ≤ (534890469678430299520309609025201886128304186002604371875564126144612092822386474609375/13439037199370381986663204381001397008167772574080305139831328422994980643537707883036672) * s ^ 20 * (2 - s) ^ 9 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e21 : (0:ℝ) ≤ (410681394390227195437583939465701807632773017027741070297585030446900568033468017578125/26878074398740763973326408762002794016335545148160610279662656845989961287075415766073344) * s ^ 21 * (2 - s) ^ 8 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e22 : (0:ℝ) ≤ (4067381476863596001452134674379364019579165103040722465328669496293971389388427734375/1119919766614198498888600365083449750680647714506692094985944035249581720294808990253056) * s ^ 22 * (2 - s) ^ 7 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e23 : (0:ℝ) ≤ (6642696536630242295946155163926156659030684141968179915212126609475168901268310546875/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 23 * (2 - s) ^ 6 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e24 : (0:ℝ) ≤ (332687517059150870823100158345704747236343106959177947078339161635839040506591796875/4479679066456793995554401460333799002722590858026768379943776140998326881179235961012224) * s ^ 24 * (2 - s) ^ 5 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e25 : (0:ℝ) ≤ (13014223708205767069589564222792650622896522921267955163856304723693893350212158203125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 25 * (2 - s) ^ 4 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e26 : (0:ℝ) ≤ (1974435313533393320681030312700939426847034025529546452363873345014212061161865234375/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 26 * (2 - s) ^ 3 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e27 : (0:ℝ) ≤ (1093438969609697795116914764070821825060846872986511166521222585180168304591552734375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 27 * (2 - s) ^ 2 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e28 : (0:ℝ) ≤ (11104928732293450705839171994612871054386917221917374591520167064464263427734375/3379189640274171985582902786271409858729638565270380975567344335678898829152051265536) * s ^ 28 * (2 - s) ^ 1 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    have e29 : (0:ℝ) ≤ (11013061617529695942994575376818078331234607076756341514198120083461181640625/136030216250604861471673062579408742472179853879318232693432614396499609224579383296) * s ^ 29 * (2 - s) ^ 0 :=
+      mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg h2 _)
+    linarith [e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28, e29]
+  have hq : (0:ℝ) ≤ (s - 123/100) ^ 2 * (s - 42/25) ^ 2 * (s - 47/25) ^ 2
+        * ((244140625/1978128094753456128) * s ^ 0 * (2 - s) ^ 29 + (37289677906352839707766236795615457861784921717939561665097117082635361083984375/8959358132913587991108802920667598005445181716053536759887552281996653762358471922024448) * s ^ 1 * (2 - s) ^ 28 + (456108105793725667230809235173665804366695675015843874423870850596656493408203125/6719518599685190993331602190500698504083886287040152569915664211497490321768853941518336) * s ^ 2 * (2 - s) ^ 27 + (28752308744941260157847453470479430278835686748127969607248157483321618716552734375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 3 * (2 - s) ^ 26 + (218735335703137768359238718927384640227428701685244486395797250162216077599365234375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 4 * (2 - s) ^ 25 + (2568024547432404009687984198937190553472879761557240663269200443093423159141845703125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 5 * (2 - s) ^ 24 + (1512922848820067616434089033596019173313771293589649760716530859658432780452880859375/10079277899527786489997403285751047756125829430560228854873496317246235482653280912277504) * s ^ 6 * (2 - s) ^ 23 + (11761600226135708579572572333582364721246668168854918884326577194974485389393310546875/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 7 * (2 - s) ^ 22 + (76853056210658041143616674013971695874210512224258446998173263547756731954117431640625/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 8 * (2 - s) ^ 21 + (142644011507664938229593385763397206687557385547107612803747736843042745304288330078125/26878074398740763973326408762002794016335545148160610279662656845989961287075415766073344) * s ^ 9 * (2 - s) ^ 20 + (256425101168404940909209146870294333332847532963119746535231168316296887568111572265625/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 10 * (2 - s) ^ 19 + (118521449385228368867125947336180844546279671398156395780329286082780476009996337890625/4479679066456793995554401460333799002722590858026768379943776140998326881179235961012224) * s ^ 11 * (2 - s) ^ 18 + (1937838023685690868481588427528966544718630474009838478100244095585982137947191162109375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 12 * (2 - s) ^ 17 + (883378792142592638104622203614817382228554341938866861955560251779782178983778076171875/11519174742317470274282746612286911721286662206354547262712567219709983408746606756888576) * s ^ 13 * (2 - s) ^ 16 + (543788789520584292230543434820897961847913202552280779304484997315843006921988525390625/5039638949763893244998701642875523878062914715280114427436748158623117741326640456138752) * s ^ 14 * (2 - s) ^ 15 + (193036746355081261395651848339356683912245593841103861211549353942143855931912841796875/1439896842789683784285343326535863965160832775794318407839070902463747926093325844611072) * s ^ 15 * (2 - s) ^ 14 + (281308265359987796262099751938493509949719976941174555034658543915825959978675537109375/1919862457052911712380457768714485286881110367725757877118761203284997234791101126148096) * s ^ 16 * (2 - s) ^ 13 + (11232575861451087995051549290282182210119284093011223612179179526217002295292423095703125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 17 * (2 - s) ^ 12 + (2275220104963855391883326390658632957422122083780309069012291961405251286338394775390625/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 18 * (2 - s) ^ 11 + (3044662147322738148614778138120859906275027683920506143991770623323435031176842041015625/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 19 * (2 - s) ^ 10 + (534890469678430299520309609025201886128304186002604371875564126144612092822386474609375/13439037199370381986663204381001397008167772574080305139831328422994980643537707883036672) * s ^ 20 * (2 - s) ^ 9 + (410681394390227195437583939465701807632773017027741070297585030446900568033468017578125/26878074398740763973326408762002794016335545148160610279662656845989961287075415766073344) * s ^ 21 * (2 - s) ^ 8 + (4067381476863596001452134674379364019579165103040722465328669496293971389388427734375/1119919766614198498888600365083449750680647714506692094985944035249581720294808990253056) * s ^ 22 * (2 - s) ^ 7 + (6642696536630242295946155163926156659030684141968179915212126609475168901268310546875/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 23 * (2 - s) ^ 6 + (332687517059150870823100158345704747236343106959177947078339161635839040506591796875/4479679066456793995554401460333799002722590858026768379943776140998326881179235961012224) * s ^ 24 * (2 - s) ^ 5 + (13014223708205767069589564222792650622896522921267955163856304723693893350212158203125/80634223196222291919979226286008382049006635444481830838987970537969883861226247298220032) * s ^ 25 * (2 - s) ^ 4 + (1974435313533393320681030312700939426847034025529546452363873345014212061161865234375/20158555799055572979994806571502095512251658861120457709746992634492470965306561824555008) * s ^ 26 * (2 - s) ^ 3 + (1093438969609697795116914764070821825060846872986511166521222585180168304591552734375/40317111598111145959989613143004191024503317722240915419493985268984941930613123649110016) * s ^ 27 * (2 - s) ^ 2 + (11104928732293450705839171994612871054386917221917374591520167064464263427734375/3379189640274171985582902786271409858729638565270380975567344335678898829152051265536) * s ^ 28 * (2 - s) ^ 1 + (11013061617529695942994575376818078331234607076756341514198120083461181640625/136030216250604861471673062579408742472179853879318232693432614396499609224579383296) * s ^ 29 * (2 - s) ^ 0) := mul_nonneg (by positivity) hbern
+  rw [← one_div, le_div_iff₀ hs]
+  linarith
+
+set_option maxHeartbeats 1000000 in
+/-- **Yudin's bound at degree 12.**  Every admissible 8-point configuration has energy at
+least `19.6475640`, against a method optimum of `19.6478`. -/
+theorem energy_ge_yudin12 (x : Fin 8 → EuclideanSpace ℝ (Fin 3)) (hx : Admissible x) :
+    (76724062790141578473323669343642141230914095486355401886155184551047892478384515625/3905016562159693967400975308262217665601843076863377544681890372163088955715079661 : ℝ) ≤ energy x := by
+  obtain ⟨hsph, hinj⟩ := hx
+  have hterm : ∀ i j : Fin 8, i ≠ j → yudinF12 ⟪x i, x j⟫ ≤ ‖x i - x j‖⁻¹ := by
+    intro i j hij
+    have hne : x i - x j ≠ 0 := sub_ne_zero.mpr (fun h => hij (hinj h))
+    have hpos : 0 < ‖x i - x j‖ := norm_pos_iff.mpr hne
+    have hle2 : ‖x i - x j‖ ≤ 2 := by
+      have h := norm_sub_le (x i) (x j)
+      rw [hsph i, hsph j] at h
+      linarith
+    rw [inner_eq_of_norm _ _ (hsph i) (hsph j)]
+    exact yudinF12_le_inv hpos hle2
+  have hdiag : ∀ i : Fin 8, yudinF12 ⟪x i, x i⟫ = yudinF12 1 := by
+    intro i; rw [real_inner_self_eq_norm_sq, hsph i]; norm_num
+  have hsplit : ∑ i, ∑ j, yudinF12 ⟪x i, x j⟫
+      = ∑ i, yudinF12 ⟪x i, x i⟫ + ∑ i, ∑ j ∈ univ.erase i, yudinF12 ⟪x i, x j⟫ := by
+    rw [← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun i _ => ?_
+    rw [← Finset.add_sum_erase _ _ (Finset.mem_univ i)]
+  have hoff : ∑ i, ∑ j ∈ univ.erase i, yudinF12 ⟪x i, x j⟫
+      ≤ ∑ i, ∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹ :=
+    Finset.sum_le_sum fun i _ => Finset.sum_le_sum fun j hj =>
+      hterm i j (Finset.ne_of_mem_erase hj).symm
+  have hupper : ∑ i, ∑ j, yudinF12 ⟪x i, x j⟫ ≤ 8 * yudinF12 1 + 2 * energy x := by
+    rw [hsplit, energy_eq_half]
+    simp only [hdiag, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    push_cast
+    linarith
+  have hlower : (64 : ℝ) * (25112058114515892702458371168699918546758419316915880412639437758263139355711703125/31240132497277551739207802466097741324814744614907020357455122977304711645720637288) ≤ ∑ i, ∑ j, yudinF12 ⟪x i, x j⟫ := by
+    simp only [yudinF12_legendre, Finset.sum_add_distrib, ← Finset.mul_sum, Finset.sum_const,
+      Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    have h1 := sum_P1_nonneg x
+    have h2 := sum_P2_nonneg x hsph
+    have h3 := sum_P3_nonneg x hsph
+    have h7 := sum_P7_nonneg x hsph
+    have h12 := sum_P12_nonneg x hsph
+    push_cast
+    linarith
+  have hf1 : yudinF12 1 = 13758168730630577439177979321639367763328957522925277625489850892359375/9058420591342176993351704978531960850644159086157308834471768161780132 := by unfold yudinF12; norm_num
+  rw [hf1] at hupper
+  linarith
+
+/-- The best lower bound proved here: `19.6475 < thomsonInf 8`. -/
+theorem thomsonInf_ge_yudin12 : (76724062790141578473323669343642141230914095486355401886155184551047892478384515625/3905016562159693967400975308262217665601843076863377544681890372163088955715079661 : ℝ) ≤ thomsonInf 8 := by
+  obtain ⟨x₀, hx₀⟩ := exists_admissible 8
+  refine le_csInf ⟨_, x₀, hx₀, rfl⟩ ?_
+  rintro e ⟨x, hx, rfl⟩
+  exact energy_ge_yudin12 x hx
+
+theorem thomsonInf_gt'' : (19.6475 : ℝ) < thomsonInf 8 :=
+  lt_of_lt_of_le (by norm_num) thomsonInf_ge_yudin12
+
+/-! ## 14. Breaking the open problem into steps
+
+The remaining gap is a *global* search problem.  This section proves the reductions that turn
+it into a finite one, so that what is left is explicitly a compactness-plus-certificates
+argument rather than an unstructured minimisation. -/
+
+/-- Every admissible configuration of at least two points has strictly positive energy. -/
+theorem energy_pos {n : ℕ} (hn : 2 ≤ n) {x : Fin n → EuclideanSpace ℝ (Fin 3)}
+    (hx : Admissible x) : 0 < energy x := by
+  have h01 : (⟨0, by omega⟩ : Fin n) < ⟨1, by omega⟩ := by simp [Fin.lt_def]
+  have hne : x ⟨0, by omega⟩ ≠ x ⟨1, by omega⟩ := fun h => by
+    have := hx.2 h; simp [Fin.ext_iff] at this
+  have hpos : 0 < ‖x ⟨0, by omega⟩ - x ⟨1, by omega⟩‖ := by simpa [sub_eq_zero] using hne
+  exact lt_of_lt_of_le (inv_pos.mpr hpos) (term_le_energy x h01)
+
+/-- **Step 1.**  The infimum is attained, so the open inequality is a statement about a single
+configuration rather than about a limit. -/
+theorem thomsonInf_attained (n : ℕ) (hn : 2 ≤ n) :
+    ∃ x : Fin n → EuclideanSpace ℝ (Fin 3), Admissible x ∧ thomsonInf n = energy x := by
+  obtain ⟨x, hx, hmin⟩ := exists_minimiser n hn
+  refine ⟨x, hx, le_antisymm ?_ ?_⟩
+  · exact csInf_le ⟨0, by rintro e ⟨y, -, rfl⟩; exact energy_nonneg y⟩ ⟨x, hx, rfl⟩
+  · exact le_csInf ⟨_, x, hx, rfl⟩ (by rintro e ⟨y, hy, rfl⟩; exact hmin y hy)
+
+/-- **Step 2.**  It is enough to bound the energy of configurations that already beat the
+target: the search may be restricted to the sublevel set `{energy ≤ B}`. -/
+theorem lower_bound_of_near_optimal {n : ℕ} (hn : 2 ≤ n) (B : ℝ)
+    (h : ∀ x : Fin n → EuclideanSpace ℝ (Fin 3), Admissible x → energy x ≤ B → B ≤ energy x) :
+    B ≤ thomsonInf n := by
+  obtain ⟨y, hy, hxy⟩ := thomsonInf_attained n hn
+  rw [hxy]
+  by_contra hlt
+  push_neg at hlt
+  exact absurd (h y hy hlt.le) (not_le.mpr hlt)
+
+/-- **Step 3 (gauge).**  Energy is invariant under every linear isometry of `ℝ³`, so a search
+may fix the rotation freedom. -/
+theorem energy_isometry {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3))
+    (f : EuclideanSpace ℝ (Fin 3) ≃ₗᵢ[ℝ] EuclideanSpace ℝ (Fin 3)) :
+    energy (fun i => f (x i)) = energy x := by
+  unfold energy
+  refine Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun j _ => ?_
+  rw [← f.map_sub, f.norm_map]
+
+theorem admissible_isometry {n : ℕ} {x : Fin n → EuclideanSpace ℝ (Fin 3)} (hx : Admissible x)
+    (f : EuclideanSpace ℝ (Fin 3) ≃ₗᵢ[ℝ] EuclideanSpace ℝ (Fin 3)) :
+    Admissible (fun i => f (x i)) :=
+  ⟨fun i => by rw [f.norm_map]; exact hx.1 i, fun i j hij => hx.2 (f.injective hij)⟩
+
+/-- **Step 4 (separation).**  Any configuration that beats the antiprism has all pairwise
+distances at least `1/19.6753 > 0.0508`. -/
+theorem separated_of_near_optimal {x : Fin 8 → EuclideanSpace ℝ (Fin 3)}
+    (hx : Admissible x) (hE : energy x ≤ 19.6753) : Separated (1 / 19.6753) x := by
+  intro i j hij
+  have := dist_ge_of_energy_le hx.2 hE hij
+  rwa [← one_div] at this
+
+/-- Updating one point of an injective configuration to a genuinely new point keeps it
+injective. -/
+theorem injective_update {n : ℕ} {x : Fin n → EuclideanSpace ℝ (Fin 3)}
+    (hinj : Function.Injective x) (i : Fin n) {p : EuclideanSpace ℝ (Fin 3)}
+    (hp : ∀ j, p ≠ x j) : Function.Injective (Function.update x i p) := by
+  intro a b hab
+  by_cases ha : a = i <;> by_cases hb : b = i
+  · rw [ha, hb]
+  · rw [ha, Function.update_self, Function.update_of_ne hb] at hab
+    exact absurd hab (hp b)
+  · rw [hb, Function.update_self, Function.update_of_ne ha] at hab
+    exact absurd hab.symm (hp a)
+  · rw [Function.update_of_ne ha, Function.update_of_ne hb] at hab
+    exact hinj hab
+
+/-- The local energies `λᵢ = Σ_{j≠i} ‖xᵢ-xⱼ‖⁻¹` sum to twice the energy, so some point
+carries at least the average `2E/n`.  This is the pigeonhole behind the covering bound. -/
+theorem sum_local_energy {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3)) :
+    ∑ i, ∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹ = 2 * energy x := by
+  rw [energy_eq_half]; ring
+
+/-- **Step 5 (covering).**  At a minimiser there are no holes: every point of the sphere lies
+within `n(n-1)/(2E)` of one of the points.  Proof: some point carries local energy at least
+the average `2E/n`; if a hole existed, moving that point into the hole would strictly lower
+the energy, contradicting minimality. -/
+theorem covering_radius {n : ℕ} (hn : 2 ≤ n) {x : Fin n → EuclideanSpace ℝ (Fin 3)}
+    (hx : Admissible x) (hmin : ∀ y : Fin n → EuclideanSpace ℝ (Fin 3), Admissible y →
+      energy x ≤ energy y) {p : EuclideanSpace ℝ (Fin 3)} (hp : ‖p‖ = 1) :
+    ∃ i, ‖p - x i‖ ≤ (n * (n - 1)) / (2 * energy x) := by
+  have hE : 0 < energy x := energy_pos hn hx
+  have hn2 : (2 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn
+  have hnpos : (0 : ℝ) < n := by linarith
+  set ρ : ℝ := (n * (n - 1)) / (2 * energy x) with hρ
+  have hρpos : 0 < ρ := by rw [hρ]; apply div_pos (by nlinarith) (by linarith)
+  by_contra hcon
+  push_neg at hcon
+  -- `(n-1)/ρ` is exactly the average local energy
+  have hn1 : (n : ℝ) - 1 ≠ 0 := by linarith
+  have hn0 : (n : ℝ) ≠ 0 := by linarith
+  have hρE : ((n : ℝ) - 1) / ρ = 2 * energy x / n := by
+    rw [hρ, div_div_eq_mul_div, div_eq_iff (mul_ne_zero hn0 hn1), div_mul_eq_mul_div,
+      eq_div_iff hn0]
+    ring
+  -- some point carries at least the average local energy
+  have hsum := sum_local_energy x
+  have hex : ∃ i : Fin n, 2 * energy x / n ≤ ∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹ := by
+    by_contra hno
+    push_neg at hno
+    have hlt : ∑ i : Fin n, ∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹
+        < ∑ _i : Fin n, 2 * energy x / n :=
+      Finset.sum_lt_sum_of_nonempty ⟨⟨0, by omega⟩, Finset.mem_univ _⟩ (fun i _ => hno i)
+    rw [hsum, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul] at hlt
+    have heq : (n : ℝ) * (2 * energy x / n) = 2 * energy x := by field_simp
+    rw [heq] at hlt
+    exact lt_irrefl _ hlt
+  obtain ⟨i, hi⟩ := hex
+  -- the moved configuration is admissible
+  have hpne : ∀ j, p ≠ x j := by
+    intro j h
+    have hlt := hcon j
+    rw [← h, sub_self, norm_zero] at hlt
+    linarith
+  have hadm : Admissible (Function.update x i p) := by
+    refine ⟨fun k => ?_, injective_update hx.2 i hpne⟩
+    by_cases hk : k = i
+    · rw [hk, Function.update_self]; exact hp
+    · rw [Function.update_of_ne hk]; exact hx.1 k
+  -- moving into the hole strictly lowers the energy
+  have hne : (univ.erase i).Nonempty := by
+    rw [← Finset.card_pos, Finset.card_erase_of_mem (Finset.mem_univ i), Finset.card_univ,
+      Fintype.card_fin]
+    omega
+  have hnew : energy (Function.update x i p) < ((n : ℝ) - 1) / ρ + rest x i := by
+    rw [energy_update]
+    have hlt : ∑ j ∈ univ.erase i, ‖p - x j‖⁻¹ < ∑ _j ∈ univ.erase i, ρ⁻¹ := by
+      refine Finset.sum_lt_sum_of_nonempty hne fun j _ => ?_
+      rw [inv_eq_one_div, inv_eq_one_div]
+      exact one_div_lt_one_div_of_lt hρpos (hcon j)
+    have hcard : ∑ _j ∈ univ.erase i, ρ⁻¹ = ((n : ℝ) - 1) / ρ := by
+      rw [Finset.sum_const, Finset.card_erase_of_mem (Finset.mem_univ i), Finset.card_univ,
+        Fintype.card_fin, nsmul_eq_mul, Nat.cast_sub (by omega)]
+      simp [div_eq_mul_inv]
+    rw [hcard] at hlt
+    linarith
+  have hold : energy x = (∑ j ∈ univ.erase i, ‖x i - x j‖⁻¹) + rest x i := by
+    conv_lhs => rw [← Function.update_eq_self i x]
+    rw [energy_update]
+  have hchain := (hmin _ hadm).trans_lt hnew
+  rw [hρE] at hchain
+  linarith
+
+/-- For eight points, the covering radius of a minimiser is below `1.4253`: there is no hole
+of angular radius `49°` or more.  This is the quantitative form of "a minimiser is spread
+out", and it is what makes the remaining search region compact and explicit. -/
+theorem covering_radius_eight {x : Fin 8 → EuclideanSpace ℝ (Fin 3)} (hx : Admissible x)
+    (hmin : ∀ y : Fin 8 → EuclideanSpace ℝ (Fin 3), Admissible y → energy x ≤ energy y)
+    {p : EuclideanSpace ℝ (Fin 3)} (hp : ‖p‖ = 1) :
+    ∃ i, ‖p - x i‖ ≤ 1.4253 := by
+  obtain ⟨i, hi⟩ := covering_radius (by norm_num) hx hmin hp
+  refine ⟨i, hi.trans ?_⟩
+  have hge : (19.6462 : ℝ) < energy x := by
+    have hle : thomsonInf 8 ≤ energy x :=
+      csInf_le ⟨0, by rintro e ⟨y, -, rfl⟩; exact energy_nonneg y⟩ ⟨x, hx, rfl⟩
+    have := thomsonInf_gt'
+    linarith
+  rw [div_le_iff₀ (by positivity)]
+  push_cast
+  nlinarith [hge]
+
+/-! ### The open problem as two named steps -/
+
+/-- `x` is within `ε` of a rotated, relabelled copy of the optimal antiprism. -/
+def NearAntiprism (ε : ℝ) (x : Fin 8 → EuclideanSpace ℝ (Fin 3)) : Prop :=
+  ∃ (f : EuclideanSpace ℝ (Fin 3) ≃ₗᵢ[ℝ] EuclideanSpace ℝ (Fin 3)) (σ : Equiv.Perm (Fin 8)),
+    ∀ i, ‖x i - f (antiprism (Real.sqrt uStar) (σ i))‖ < ε
+
+/-- **The open inequality, split into two independent steps.**
+
+`H1` is *local minimality at the antiprism*: the transverse Hessian statement of the blueprint
+(§5.5), a finite algebraic computation, listed there as reachable.
+
+`H2` is *the global search*: every configuration at least as good as the antiprism is already
+near it.  This is where the whole difficulty of `N = 8` sits, and it is what interval
+branch-and-bound over the 13-dimensional reduced space would establish.
+
+Neither step is proved here.  What is proved is that they suffice, so the open problem is now
+two clearly separated statements rather than one. -/
+theorem thomson_eight_lower_of (ε : ℝ)
+    (H1 : ∀ x : Fin 8 → EuclideanSpace ℝ (Fin 3), Admissible x → NearAntiprism ε x →
+      antiprismEnergy uStar ≤ energy x)
+    (H2 : ∀ x : Fin 8 → EuclideanSpace ℝ (Fin 3), Admissible x →
+      energy x ≤ antiprismEnergy uStar → NearAntiprism ε x) :
+    antiprismEnergy uStar ≤ thomsonInf 8 :=
+  lower_bound_of_near_optimal (by norm_num) _ fun x hx hle => H1 x hx (H2 x hx hle)
+
+
+/-! ## 15. Slack rigidity: what a configuration that beats the antiprism must look like
+
+The degree-12 Yudin argument of §13 compares `‖xᵢ-xⱼ‖⁻¹` with `f(⟪xᵢ,xⱼ⟫)` pair by pair and
+then discards the comparison.  Keeping it turns the bound into an *exact* decomposition
+
+`E(x) = B₁₂ + ∑_{i<j} (‖xᵢ-xⱼ‖⁻¹ - f(⟪xᵢ,xⱼ⟫)) + ½ ∑ₖ cₖ ∑_{i,j} Pₖ(⟪xᵢ,xⱼ⟫)`,
+
+in which both sums are nonnegative — the first because `f(1-s²/2) ≤ 1/s` (`yudinF12_le_inv`),
+the second by Schoenberg positivity (`sum_P12_nonneg` and friends).  A configuration with
+`E(x) ≤ 19.6753` therefore has a *budget* of `19.6753 - B₁₂ < 0.0277361` to spend on the whole
+of the first sum, so every single pair must stay inside that budget.  Since the slack
+`1/s - f(1-s²/2)` blows up as `s → 0`, this is a strong separation statement.
+
+This is the one place where the linear-programming method gives more than its optimal value:
+the *value* is capped at `19.6478` (§13), but the *slack* still carries information.  It is
+what replaces the crude bound `1/E ≈ 0.0508` of §14 by `0.962`, a factor of nineteen. -/
+
+/-- The degree-12 Yudin bound, kept in slack form: for any single pair, the amount by which the
+Coulomb term exceeds the Yudin polynomial is at most `E(x) - B₁₂`. -/
+theorem yudin12_pair_slack {x : Fin 8 → EuclideanSpace ℝ (Fin 3)} (hx : Admissible x)
+    {a b : Fin 8} (hab : a ≠ b) :
+    ‖x a - x b‖⁻¹ - yudinF12 ⟪x a, x b⟫ ≤ energy x - 196475639 / 10000000 := by
+  obtain ⟨hsph, hinj⟩ := hx
+  set G : Fin 8 → Fin 8 → ℝ := fun i j => ‖x i - x j‖⁻¹ - yudinF12 ⟪x i, x j⟫ with hG
+  have hGnn : ∀ i j : Fin 8, i ≠ j → 0 ≤ G i j := by
+    intro i j hij
+    have hne : x i - x j ≠ 0 := sub_ne_zero.mpr (fun h => hij (hinj h))
+    have hpos : 0 < ‖x i - x j‖ := norm_pos_iff.mpr hne
+    have hle2 : ‖x i - x j‖ ≤ 2 := by
+      have h := norm_sub_le (x i) (x j)
+      rw [hsph i, hsph j] at h; linarith
+    have hkey := yudinF12_le_inv hpos hle2
+    have hinner : (⟪x i, x j⟫ : ℝ) = 1 - ‖x i - x j‖ ^ 2 / 2 :=
+      inner_eq_of_norm _ _ (hsph i) (hsph j)
+    simp only [hG, hinner]
+    linarith
+  -- every row of the slack matrix is nonnegative
+  have hrow : ∀ i : Fin 8, 0 ≤ ∑ j ∈ univ.erase i, G i j := fun i =>
+    Finset.sum_nonneg fun j hj => hGnn i j (Finset.ne_of_mem_erase hj).symm
+  -- the two ordered copies of the pair `(a,b)` are dominated by the whole double sum
+  have hrowa : G a b ≤ ∑ j ∈ univ.erase a, G a j := by
+    have hsub : ({b} : Finset (Fin 8)) ⊆ univ.erase a := by
+      simp [Finset.subset_iff, Finset.mem_erase, hab.symm]
+    have h := Finset.sum_le_sum_of_subset_of_nonneg hsub
+      (fun j hj _ => hGnn a j (Finset.ne_of_mem_erase hj).symm)
+    simpa using h
+  have hrowb : G b a ≤ ∑ j ∈ univ.erase b, G b j := by
+    have hsub : ({a} : Finset (Fin 8)) ⊆ univ.erase b := by
+      simp [Finset.subset_iff, Finset.mem_erase, hab]
+    have h := Finset.sum_le_sum_of_subset_of_nonneg hsub
+      (fun j hj _ => hGnn b j (Finset.ne_of_mem_erase hj).symm)
+    simpa using h
+  have hsymm : G b a = G a b := by
+    simp only [hG, norm_sub_rev (x b) (x a), real_inner_comm (x b) (x a)]
+  have hpair : 2 * G a b ≤ ∑ i, ∑ j ∈ univ.erase i, G i j := by
+    have h := Finset.sum_le_sum_of_subset_of_nonneg
+      (Finset.subset_univ ({a, b} : Finset (Fin 8))) (fun i _ _ => hrow i)
+    rw [Finset.sum_pair hab] at h
+    have := hrowa; have := hrowb; rw [hsymm] at hrowb
+    linarith
+  -- the double sum of slacks is `2E` minus the double sum of the Yudin polynomial
+  have hsum : ∑ i, ∑ j ∈ univ.erase i, G i j
+      = 2 * energy x - ∑ i, ∑ j ∈ univ.erase i, yudinF12 ⟪x i, x j⟫ := by
+    simp only [hG, Finset.sum_sub_distrib]
+    rw [energy_eq_half]; ring
+  -- Schoenberg positivity bounds the double sum of the Yudin polynomial below by `2B₁₂`
+  have hoff : 2 * (196475639 / 10000000 : ℝ)
+      ≤ ∑ i, ∑ j ∈ univ.erase i, yudinF12 ⟪x i, x j⟫ := by
+    have hdiag : ∀ i : Fin 8, yudinF12 ⟪x i, x i⟫ = yudinF12 1 := by
+      intro i; rw [real_inner_self_eq_norm_sq, hsph i]; norm_num
+    have hsplit : ∑ i, ∑ j, yudinF12 ⟪x i, x j⟫
+        = ∑ i, yudinF12 ⟪x i, x i⟫ + ∑ i, ∑ j ∈ univ.erase i, yudinF12 ⟪x i, x j⟫ := by
+      rw [← Finset.sum_add_distrib]
+      refine Finset.sum_congr rfl fun i _ => ?_
+      rw [← Finset.add_sum_erase _ _ (Finset.mem_univ i)]
+    have hlower : (64 : ℝ) * (25112058114515892702458371168699918546758419316915880412639437758263139355711703125/31240132497277551739207802466097741324814744614907020357455122977304711645720637288) ≤ ∑ i, ∑ j, yudinF12 ⟪x i, x j⟫ := by
+      simp only [yudinF12_legendre, Finset.sum_add_distrib, ← Finset.mul_sum, Finset.sum_const,
+        Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+      have h1 := sum_P1_nonneg x
+      have h2 := sum_P2_nonneg x hsph
+      have h3 := sum_P3_nonneg x hsph
+      have h4 := sum_P4_nonneg x hsph
+      have h7 := sum_P7_nonneg x hsph
+      have h12 := sum_P12_nonneg x hsph
+      push_cast
+      linarith
+    have hf1 : yudinF12 1 = 13758168730630577439177979321639367763328957522925277625489850892359375/9058420591342176993351704978531960850644159086157308834471768161780132 := by
+      unfold yudinF12; norm_num
+    rw [hsplit] at hlower
+    simp only [hdiag, hf1, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+      nsmul_eq_mul] at hlower
+    push_cast at hlower
+    norm_num at hlower ⊢
+    linarith
+  linarith [hpair, hsum, hoff]
+
+set_option maxHeartbeats 4000000 in
+/-- The certificate behind the separation bound: on `(0, 0.962]` the slack of the degree-12
+Yudin polynomial exceeds the whole budget `0.0277361`.  As in `yudinF12_le_inv`, the proof is a
+Bernstein expansion — here on `[0, 481/500]` — with all twenty-six coefficients positive. -/
+theorem yudin12_slack_gt {s : ℝ} (hs : 0 < s) (hs2 : s ≤ 481/500) :
+    (277361 / 10000000 : ℝ) * s < 1 - s * yudinF12 (1 - s ^ 2 / 2) := by
+  have h0 : (0:ℝ) ≤ s := hs.le
+  have ha : (0:ℝ) ≤ 481/500 - s := by linarith
+  have key : 1 - s * yudinF12 (1 - s ^ 2 / 2) - 277361 / 10000000 * s
+      = (29802322387695312500000000000000000000000000000000000000000000000000/11314279664221366419737473549541091847936892664609463441449438732001) * s ^ 0 * (481/500 - s) ^ 25
+        + (1586850423553437721436468568563134830076748516496722099381570511972012262253188174962997436523437500000000000000000000000000000000000000000/25622375971646719439037371137436851610740403084618518265860909458623516894021076116479425169776849362740175471791989653854279289258601033) * s ^ 1 * (481/500 - s) ^ 24
+        + (5945754118764572450149261676329771925062850888645303201406448910619535173640434598922729492187500000000000000000000000000000000000000000000/8540791990548906479679123712478950536913467694872839421953636486207838964673692038826475056592283120913391823930663217951426429752867011) * s ^ 2 * (481/500 - s) ^ 23
+        + (208894238218596681782003162972713014822493683926721312794505650003741678584344635601337754848599433898925781250000000000000000000000000000000000000000/41958641479288753002097970226827595818892841158399298435820102051054723365770249352547918477341673535876924352621799822866462162976378106433565937) * s ^ 3 * (481/500 - s) ^ 22
+        + (11989046410957037965887281983523300366394618010119863902481340952479837447884350970822359341382980346679687500000000000000000000000000000000000000000/471445409879648910135932249739635908077447653465160656582248337652300262536744374747729421093726668942437352276649436211982720932318855128467033) * s ^ 4 * (481/500 - s) ^ 21
+        + (12428955073851527522608127489019660466037818851644844919623337938818988946615409725327253366544470191001892089843750000000000000000000000000000000000000/125875924437866259006293910680482787456678523475197895307460306153164170097310748057643755432025020607630773057865399468599386488929134319300697811) * s ^ 5 * (481/500 - s) ^ 20
+        + (32056523185747684889604493896100810685176422437832854457444349072142844408050658278364444719254970550537109375000000000000000000000000000000000000000/105867051671880789744570151960035986086357042451806472083650383644376930275282378517782805241400353749058682134453658089654656424667059982590999) * s ^ 6 * (481/500 - s) ^ 19
+        + (2556605455308514690559896099910638556114173043064992905312302463513637038122208004754345263892914180178195238113403320312500000000000000000000000000000000/3398649959822388993169935588373035261330320133830343173301428266135432592627390197556381396664675556406030872562365785652183435201086626621118840897) * s ^ 7 * (481/500 - s) ^ 18
+        + (20060569820728397318356502831762185731361628672043328635237394405681716514840137335855498225920763798058032989501953125000000000000000000000000000000000/13021647355641337138582128691084426288621916221572196066288997188258362423859732557687285044692243511134217902537799945027522740234048377858692877) * s ^ 8 * (481/500 - s) ^ 17
+        + (1278226460544106180781239861560044071447825950893145965285626600650043676657377998625732745544569368939846754074096679687500000000000000000000000000000000/485521422831769856167133655481862180190045733404334739043061180876490370375341456793768770952096508058004410366052255093169062171583803803016977271) * s ^ 9 * (481/500 - s) ^ 16
+        + (1838061601256320248739767074634491066913993573265962389729428146563158741752254738672679540861047245562076568603515625000000000000000000000000000000000000/485521422831769856167133655481862180190045733404334739043061180876490370375341456793768770952096508058004410366052255093169062171583803803016977271) * s ^ 10 * (481/500 - s) ^ 15
+        + (5217634169999307247013713595031379082600611083406419206310061932145157831303703910369422483492142660543322563171386718750000000000000000000000000000000000/1132883319940796331056645196124345087110106711276781057767142755378477530875796732518793798888225185468676957520788595217394478400362208873706280299) * s ^ 11 * (481/500 - s) ^ 14
+        + (16159428305151991722234030667957281572187072238328812300777101686949242278412768896428592253038412239402532577514648437500000000000000000000000000000000000/3398649959822388993169935588373035261330320133830343173301428266135432592627390197556381396664675556406030872562365785652183435201086626621118840897) * s ^ 12 * (481/500 - s) ^ 13
+        + (14169106362696910321786126286994770167073907427158438598604542795820349166613112175605645180897903116419911384582519531250000000000000000000000000000000000/3398649959822388993169935588373035261330320133830343173301428266135432592627390197556381396664675556406030872562365785652183435201086626621118840897) * s ^ 13 * (481/500 - s) ^ 12
+        + (390384936920583262976510953619826516585751339869812516134249882494296646728090921569389917409674637019634246826171875000000000000000000000000000000000000/125875924437866259006293910680482787456678523475197895307460306153164170097310748057643755432025020607630773057865399468599386488929134319300697811) * s ^ 14 * (481/500 - s) ^ 11
+        + (736744492605294818773081934449500410067593776116298873912822380735505604126139682298037542200982979852706193923950195312500000000000000000000000000000000/377627773313598777018881732041448362370035570425593685922380918459492510291932244172931266296075061822892319173596198405798159466787402957902093433) * s ^ 15 * (481/500 - s) ^ 10
+        + (465601554342001213989922036431425174381545857592515799199145465851424344062974825509610525842949189245700836181640625000000000000000000000000000000000/451168187949341430130085701363737589450460657617196757374409699473706702857744616694063639541308317590074455404535481966306044763186861359500709) * s ^ 16 * (481/500 - s) ^ 9
+        + (19092740178363608574491208506424035927950506083914119106416837567786657684738526364415955118025557044893503189086914062500000000000000000000000000000000/41958641479288753002097970226827595818892841158399298435820102051054723365770249352547918477341673535876924352621799822866462162976378106433565937) * s ^ 17 * (481/500 - s) ^ 8
+        + (80186322610963964057061235988857027807012414424172717551601424796109047281431064464677026940544179826974868774414062500000000000000000000000000000000000/485521422831769856167133655481862180190045733404334739043061180876490370375341456793768770952096508058004410366052255093169062171583803803016977271) * s ^ 18 * (481/500 - s) ^ 7
+        + (164702867186373473008705270764056565436788563351135713050888867540423736296248739747080082443703085370361804962158203125000000000000000000000000000000000/3398649959822388993169935588373035261330320133830343173301428266135432592627390197556381396664675556406030872562365785652183435201086626621118840897) * s ^ 19 * (481/500 - s) ^ 6
+        + (4230073100314272763436218054373286105072077350120755963368495644864819134462205461741018056235577687621116638183593750000000000000000000000000000000000/377627773313598777018881732041448362370035570425593685922380918459492510291932244172931266296075061822892319173596198405798159466787402957902093433) * s ^ 20 * (481/500 - s) ^ 5
+        + (6668039795644714353581580341402648523508475690684187959267499853472410806085325000561177550400047190487384796142578125000000000000000000000000000000000/3398649959822388993169935588373035261330320133830343173301428266135432592627390197556381396664675556406030872562365785652183435201086626621118840897) * s ^ 21 * (481/500 - s) ^ 4
+        + (277089572992653825620685733757401722374881226367207872459628978615422814653041891930521979343894869089126586914062500000000000000000000000000000000000/1132883319940796331056645196124345087110106711276781057767142755378477530875796732518793798888225185468676957520788595217394478400362208873706280299) * s ^ 22 * (481/500 - s) ^ 3
+        + (7300613476088758655432390412390435455405782086478191863390020310511909887208664689245532661799266672134399414062500000000000000000000000000000000000/377627773313598777018881732041448362370035570425593685922380918459492510291932244172931266296075061822892319173596198405798159466787402957902093433) * s ^ 23 * (481/500 - s) ^ 2
+        + (7173611431758212806438554253069479183622321214237840329620962727737459646071278419168759412384033203125000000000000000000000000000000000000000/9842515008043338729087020930524887595330246577152075635894933626801483313575005712537630419268513613858063418395918325795557626783105349855399) * s ^ 24 * (481/500 - s) ^ 1
+        + (304995548184616517853858791724304380883054924697205699755338148963450646137207277292025000000000000000000000000000000000000000000000000/3810497486660216310138219485298059463929634756930730017768073413395851069909022730366872016751263497428595980795942054121392809439839469553) * s ^ 25 * (481/500 - s) ^ 0 := by
+    unfold yudinF12; ring
+  have e0 : (0:ℝ) ≤ (29802322387695312500000000000000000000000000000000000000000000000000/11314279664221366419737473549541091847936892664609463441449438732001) * s ^ 0 * (481/500 - s) ^ 25 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e1 : (0:ℝ) ≤ (1586850423553437721436468568563134830076748516496722099381570511972012262253188174962997436523437500000000000000000000000000000000000000000/25622375971646719439037371137436851610740403084618518265860909458623516894021076116479425169776849362740175471791989653854279289258601033) * s ^ 1 * (481/500 - s) ^ 24 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e2 : (0:ℝ) ≤ (5945754118764572450149261676329771925062850888645303201406448910619535173640434598922729492187500000000000000000000000000000000000000000000/8540791990548906479679123712478950536913467694872839421953636486207838964673692038826475056592283120913391823930663217951426429752867011) * s ^ 2 * (481/500 - s) ^ 23 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e3 : (0:ℝ) ≤ (208894238218596681782003162972713014822493683926721312794505650003741678584344635601337754848599433898925781250000000000000000000000000000000000000000/41958641479288753002097970226827595818892841158399298435820102051054723365770249352547918477341673535876924352621799822866462162976378106433565937) * s ^ 3 * (481/500 - s) ^ 22 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e4 : (0:ℝ) ≤ (11989046410957037965887281983523300366394618010119863902481340952479837447884350970822359341382980346679687500000000000000000000000000000000000000000/471445409879648910135932249739635908077447653465160656582248337652300262536744374747729421093726668942437352276649436211982720932318855128467033) * s ^ 4 * (481/500 - s) ^ 21 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e5 : (0:ℝ) ≤ (12428955073851527522608127489019660466037818851644844919623337938818988946615409725327253366544470191001892089843750000000000000000000000000000000000000/125875924437866259006293910680482787456678523475197895307460306153164170097310748057643755432025020607630773057865399468599386488929134319300697811) * s ^ 5 * (481/500 - s) ^ 20 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e6 : (0:ℝ) ≤ (32056523185747684889604493896100810685176422437832854457444349072142844408050658278364444719254970550537109375000000000000000000000000000000000000000/105867051671880789744570151960035986086357042451806472083650383644376930275282378517782805241400353749058682134453658089654656424667059982590999) * s ^ 6 * (481/500 - s) ^ 19 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e7 : (0:ℝ) ≤ (2556605455308514690559896099910638556114173043064992905312302463513637038122208004754345263892914180178195238113403320312500000000000000000000000000000000/3398649959822388993169935588373035261330320133830343173301428266135432592627390197556381396664675556406030872562365785652183435201086626621118840897) * s ^ 7 * (481/500 - s) ^ 18 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e8 : (0:ℝ) ≤ (20060569820728397318356502831762185731361628672043328635237394405681716514840137335855498225920763798058032989501953125000000000000000000000000000000000/13021647355641337138582128691084426288621916221572196066288997188258362423859732557687285044692243511134217902537799945027522740234048377858692877) * s ^ 8 * (481/500 - s) ^ 17 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e9 : (0:ℝ) ≤ (1278226460544106180781239861560044071447825950893145965285626600650043676657377998625732745544569368939846754074096679687500000000000000000000000000000000/485521422831769856167133655481862180190045733404334739043061180876490370375341456793768770952096508058004410366052255093169062171583803803016977271) * s ^ 9 * (481/500 - s) ^ 16 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e10 : (0:ℝ) ≤ (1838061601256320248739767074634491066913993573265962389729428146563158741752254738672679540861047245562076568603515625000000000000000000000000000000000000/485521422831769856167133655481862180190045733404334739043061180876490370375341456793768770952096508058004410366052255093169062171583803803016977271) * s ^ 10 * (481/500 - s) ^ 15 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e11 : (0:ℝ) ≤ (5217634169999307247013713595031379082600611083406419206310061932145157831303703910369422483492142660543322563171386718750000000000000000000000000000000000/1132883319940796331056645196124345087110106711276781057767142755378477530875796732518793798888225185468676957520788595217394478400362208873706280299) * s ^ 11 * (481/500 - s) ^ 14 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e12 : (0:ℝ) ≤ (16159428305151991722234030667957281572187072238328812300777101686949242278412768896428592253038412239402532577514648437500000000000000000000000000000000000/3398649959822388993169935588373035261330320133830343173301428266135432592627390197556381396664675556406030872562365785652183435201086626621118840897) * s ^ 12 * (481/500 - s) ^ 13 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e13 : (0:ℝ) ≤ (14169106362696910321786126286994770167073907427158438598604542795820349166613112175605645180897903116419911384582519531250000000000000000000000000000000000/3398649959822388993169935588373035261330320133830343173301428266135432592627390197556381396664675556406030872562365785652183435201086626621118840897) * s ^ 13 * (481/500 - s) ^ 12 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e14 : (0:ℝ) ≤ (390384936920583262976510953619826516585751339869812516134249882494296646728090921569389917409674637019634246826171875000000000000000000000000000000000000/125875924437866259006293910680482787456678523475197895307460306153164170097310748057643755432025020607630773057865399468599386488929134319300697811) * s ^ 14 * (481/500 - s) ^ 11 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e15 : (0:ℝ) ≤ (736744492605294818773081934449500410067593776116298873912822380735505604126139682298037542200982979852706193923950195312500000000000000000000000000000000/377627773313598777018881732041448362370035570425593685922380918459492510291932244172931266296075061822892319173596198405798159466787402957902093433) * s ^ 15 * (481/500 - s) ^ 10 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e16 : (0:ℝ) ≤ (465601554342001213989922036431425174381545857592515799199145465851424344062974825509610525842949189245700836181640625000000000000000000000000000000000/451168187949341430130085701363737589450460657617196757374409699473706702857744616694063639541308317590074455404535481966306044763186861359500709) * s ^ 16 * (481/500 - s) ^ 9 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e17 : (0:ℝ) ≤ (19092740178363608574491208506424035927950506083914119106416837567786657684738526364415955118025557044893503189086914062500000000000000000000000000000000/41958641479288753002097970226827595818892841158399298435820102051054723365770249352547918477341673535876924352621799822866462162976378106433565937) * s ^ 17 * (481/500 - s) ^ 8 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e18 : (0:ℝ) ≤ (80186322610963964057061235988857027807012414424172717551601424796109047281431064464677026940544179826974868774414062500000000000000000000000000000000000/485521422831769856167133655481862180190045733404334739043061180876490370375341456793768770952096508058004410366052255093169062171583803803016977271) * s ^ 18 * (481/500 - s) ^ 7 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e19 : (0:ℝ) ≤ (164702867186373473008705270764056565436788563351135713050888867540423736296248739747080082443703085370361804962158203125000000000000000000000000000000000/3398649959822388993169935588373035261330320133830343173301428266135432592627390197556381396664675556406030872562365785652183435201086626621118840897) * s ^ 19 * (481/500 - s) ^ 6 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e20 : (0:ℝ) ≤ (4230073100314272763436218054373286105072077350120755963368495644864819134462205461741018056235577687621116638183593750000000000000000000000000000000000/377627773313598777018881732041448362370035570425593685922380918459492510291932244172931266296075061822892319173596198405798159466787402957902093433) * s ^ 20 * (481/500 - s) ^ 5 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e21 : (0:ℝ) ≤ (6668039795644714353581580341402648523508475690684187959267499853472410806085325000561177550400047190487384796142578125000000000000000000000000000000000/3398649959822388993169935588373035261330320133830343173301428266135432592627390197556381396664675556406030872562365785652183435201086626621118840897) * s ^ 21 * (481/500 - s) ^ 4 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e22 : (0:ℝ) ≤ (277089572992653825620685733757401722374881226367207872459628978615422814653041891930521979343894869089126586914062500000000000000000000000000000000000/1132883319940796331056645196124345087110106711276781057767142755378477530875796732518793798888225185468676957520788595217394478400362208873706280299) * s ^ 22 * (481/500 - s) ^ 3 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e23 : (0:ℝ) ≤ (7300613476088758655432390412390435455405782086478191863390020310511909887208664689245532661799266672134399414062500000000000000000000000000000000000/377627773313598777018881732041448362370035570425593685922380918459492510291932244172931266296075061822892319173596198405798159466787402957902093433) * s ^ 23 * (481/500 - s) ^ 2 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e24 : (0:ℝ) ≤ (7173611431758212806438554253069479183622321214237840329620962727737459646071278419168759412384033203125000000000000000000000000000000000000000/9842515008043338729087020930524887595330246577152075635894933626801483313575005712537630419268513613858063418395918325795557626783105349855399) * s ^ 24 * (481/500 - s) ^ 1 :=
+    mul_nonneg (mul_nonneg (by norm_num) (pow_nonneg h0 _)) (pow_nonneg ha _)
+  have e25 : (0:ℝ) < (304995548184616517853858791724304380883054924697205699755338148963450646137207277292025000000000000000000000000000000000000000000000000/3810497486660216310138219485298059463929634756930730017768073413395851069909022730366872016751263497428595980795942054121392809439839469553) * s ^ 25 * (481/500 - s) ^ 0 := by
+    rw [pow_zero, mul_one]
+    exact mul_pos (by norm_num) (pow_pos hs 25)
+  linarith [e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25]
+
+/-- **Sharp separation.**  Every admissible eight-point configuration whose energy is at most
+that of the best square antiprism has all `28` pairwise distances greater than `0.962`.
+
+Compare `separated_of_near_optimal` (§14), which gives only `1/19.6753 > 0.0508`: the slack
+form of the Yudin bound improves the separation constant by a factor of nineteen.  For scale,
+the conjectured minimiser's own shortest distance is `1.1713`, and the largest separation any
+eight points can achieve (the Tammes value) is `1.2157`. -/
+theorem separation_of_energy_le {x : Fin 8 → EuclideanSpace ℝ (Fin 3)} (hx : Admissible x)
+    (hE : energy x ≤ 19.6753) {i j : Fin 8} (hij : i ≠ j) : 481/500 < ‖x i - x j‖ := by
+  by_contra hcon
+  push_neg at hcon
+  have hne : x i - x j ≠ 0 := sub_ne_zero.mpr (fun h => hij (hx.2 h))
+  have hpos : 0 < ‖x i - x j‖ := norm_pos_iff.mpr hne
+  have hslack := yudin12_pair_slack hx hij
+  have hinner : (⟪x i, x j⟫ : ℝ) = 1 - ‖x i - x j‖ ^ 2 / 2 :=
+    inner_eq_of_norm _ _ (hx.1 i) (hx.1 j)
+  rw [hinner] at hslack
+  have hcert := yudin12_slack_gt hpos hcon
+  have hdiv : (277361 / 10000000 : ℝ)
+      < ‖x i - x j‖⁻¹ - yudinF12 (1 - ‖x i - x j‖ ^ 2 / 2) := by
+    rw [← sub_pos] at hcert ⊢
+    have hre : ‖x i - x j‖⁻¹ - yudinF12 (1 - ‖x i - x j‖ ^ 2 / 2) - 277361 / 10000000
+        = (1 - ‖x i - x j‖ * yudinF12 (1 - ‖x i - x j‖ ^ 2 / 2)
+            - 277361 / 10000000 * ‖x i - x j‖) / ‖x i - x j‖ := by
+      field_simp
+    rw [hre]
+    exact div_pos hcert hpos
+  norm_num at hE hslack hdiv
+  linarith
+
+/-- The sharp separation, in the `Separated` language of §1. -/
+theorem separated_sharp {x : Fin 8 → EuclideanSpace ℝ (Fin 3)} (hx : Admissible x)
+    (hE : energy x ≤ 19.6753) : Separated (481/500) x :=
+  fun _ _ hij => (separation_of_energy_le hx hE hij).le
+
+
+
+/-! ## 16. The three-point certificate: the open inequality reduced to two named leaves
+
+Blueprint §12.  The Cohn–Woo-type three-point bound is numerically sharp for `N = 8`:
+restricted by the separation theorem of §15 to inner products `t ≤ 0.5373`, its value is `E(u*)`
+to seven digits, with a certificate exactly tight at the antiprism.  This section formalises
+the *architecture* of that proof:
+
+* `S3`, `Fsum`, `ThreePointCert` — the objects;
+* `bv_positivity` — Bachoc–Vallentin positivity, **proved** from the addition theorem on `S¹`
+  (`Q3_addition`, six `ring` identities), a sum-of-squares argument, a relabelling, and an
+  orthonormal frame of `x^⊥` (`exists_tangent_frame`, from `Orthonormal.exists_orthonormalBasis_extension_of_card_eq`);
+* `three_point_bound` — the bound, **proved** here from leaf 1 and Schoenberg at degree 1;
+* `exists_threePointCert` — **proved** from six Tasks (`certData`, `certData_*`), each a `sorry`
+  with a proof sketch — the exact certificate (numerically established:
+  `threepoint/certificate_*.json`) and its verification;
+* `thomson_eight_lower` — **proved** from the two leaves, the bound, and §15.
+
+So the open problem is now exactly the six Tasks, and nothing else. -/
+
+section ThreePoint
+open Matrix
+
+
+/-- The inner polynomial of the Bachoc–Vallentin matrices for `S²`: the Chebyshev polynomial
+`T_k` of the equator `S¹`, homogenised so that
+`Q3 k u v t = ((1-u²)(1-v²))^{k/2} · T_k((t-uv)/√((1-u²)(1-v²)))` is a polynomial.  `k ≤ 5`. -/
+noncomputable def Q3 (k : ℕ) (u v t : ℝ) : ℝ :=
+  match k with
+  | 0 => 1
+  | 1 => t - u * v
+  | 2 => 2 * (t - u * v) ^ 2 - (1 - u ^ 2) * (1 - v ^ 2)
+  | 3 => 4 * (t - u * v) ^ 3 - 3 * (t - u * v) * ((1 - u ^ 2) * (1 - v ^ 2))
+  | 4 => 8 * (t - u * v) ^ 4 - 8 * (t - u * v) ^ 2 * ((1 - u ^ 2) * (1 - v ^ 2))
+          + ((1 - u ^ 2) * (1 - v ^ 2)) ^ 2
+  | 5 => 16 * (t - u * v) ^ 5 - 20 * (t - u * v) ^ 3 * ((1 - u ^ 2) * (1 - v ^ 2))
+          + 5 * (t - u * v) * ((1 - u ^ 2) * (1 - v ^ 2)) ^ 2
+  | _ => 0
+
+/-- `Y_k(u,v,t)_{ij} = uⁱ vʲ Q_k(u,v,t)`, `0 ≤ i,j ≤ 8-k` (the block sizes of degree `d = 8`). -/
+noncomputable def Y3 (k : ℕ) (u v t : ℝ) : Matrix (Fin (9 - k)) (Fin (9 - k)) ℝ :=
+  Matrix.of fun i j => u ^ (i : ℕ) * v ^ (j : ℕ) * Q3 k u v t
+
+/-- The Bachoc–Vallentin matrix `S_k = (1/6) Σ_{σ ∈ S₃} Y_k ∘ σ`, symmetric in `(u,v,t)`. -/
+noncomputable def S3 (k : ℕ) (u v t : ℝ) : Matrix (Fin (9 - k)) (Fin (9 - k)) ℝ :=
+  (1 / 6 : ℝ) • (Y3 k u v t + Y3 k u t v + Y3 k v u t + Y3 k v t u + Y3 k t u v + Y3 k t v u)
+
+theorem S3_swap12 (k : ℕ) (u v t : ℝ) : S3 k u v t = S3 k v u t := by
+  ext i j
+  simp only [S3, Y3, Matrix.smul_apply, Matrix.add_apply, Matrix.of_apply, smul_eq_mul]
+  ring
+theorem S3_swap23 (k : ℕ) (u v t : ℝ) : S3 k u v t = S3 k u t v := by
+  ext i j
+  simp only [S3, Y3, Matrix.smul_apply, Matrix.add_apply, Matrix.of_apply, smul_eq_mul]
+  ring
+
+/-- The three-point polynomial `F(u,v,t) = Σ_k ⟨F_k, S_k(u,v,t)⟩` with `F_k = L_kᵀ D_k L_k` given in
+factored form, so that positive semidefiniteness is `D_k ≥ 0` and needs no linear algebra. -/
+noncomputable def Fsum (L : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 - (k : ℕ))) ℝ)
+    (D : (k : Fin 6) → Fin (9 - (k : ℕ)) → ℝ) (u v t : ℝ) : ℝ :=
+  ∑ k : Fin 6, ∑ r, D k r * (L k r ⬝ᵥ (S3 (k : ℕ) u v t).mulVec (L k r))
+
+theorem Fsum_swap12 (L) (D) (u v t : ℝ) : Fsum L D u v t = Fsum L D v u t := by
+  unfold Fsum
+  refine Finset.sum_congr rfl fun k _ => Finset.sum_congr rfl fun r _ => ?_
+  rw [S3_swap12]
+theorem Fsum_swap23 (L) (D) (u v t : ℝ) : Fsum L D u v t = Fsum L D u t v := by
+  unfold Fsum
+  refine Finset.sum_congr rfl fun k _ => Finset.sum_congr rfl fun r _ => ?_
+  rw [S3_swap23]
+
+/-! ### The addition theorem on the equator `S¹`
+
+Real and imaginary parts of `(a + ib)^k`, `k ≤ 5`: the degree-`k` harmonics of `S¹`, evaluated on
+the tangent-plane coordinates `(a, b)` of a unit vector. -/
+noncomputable def C1 (k : ℕ) (a b : ℝ) : ℝ :=
+  match k with
+  | 0 => 1 | 1 => a | 2 => a ^ 2 - b ^ 2 | 3 => a ^ 3 - 3 * a * b ^ 2
+  | 4 => a ^ 4 - 6 * a ^ 2 * b ^ 2 + b ^ 4 | 5 => a ^ 5 - 10 * a ^ 3 * b ^ 2 + 5 * a * b ^ 4
+  | _ => 0
+noncomputable def S1 (k : ℕ) (a b : ℝ) : ℝ :=
+  match k with
+  | 0 => 0 | 1 => b | 2 => 2 * a * b | 3 => 3 * a ^ 2 * b - b ^ 3
+  | 4 => 4 * a ^ 3 * b - 4 * a * b ^ 3 | 5 => 5 * a ^ 4 * b - 10 * a ^ 2 * b ^ 3 + b ^ 5
+  | _ => 0
+
+/-- **Addition theorem.**  If `y, z` have tangent-plane coordinates `(a,b)`, `(a',b')` at `x`
+(so `t − uv = aa' + bb'`, `1 − u² = a² + b²`, `1 − v² = a'² + b'²`), then
+`Q_k(u,v,t) = C_k(a,b) C_k(a',b') + S_k(a,b) S_k(a',b')` — de Moivre. -/
+theorem Q3_addition (k : ℕ) (hk : k ≤ 5) (u v t a b a' b' : ℝ)
+    (hu : 1 - u ^ 2 = a ^ 2 + b ^ 2) (hv : 1 - v ^ 2 = a' ^ 2 + b' ^ 2)
+    (ht : t - u * v = a * a' + b * b') :
+    Q3 k u v t = C1 k a b * C1 k a' b' + S1 k a b * S1 k a' b' := by
+  interval_cases k <;> simp only [Q3, C1, S1, ht, hu, hv] <;> ring
+
+/-- The quadratic form of `Σ_{j,l} Y_k` at a fixed centre is a sum of two squares. -/
+theorem quad_Y3_nonneg (k : ℕ) (hk : k ≤ 5) {n : ℕ} (u : Fin n → ℝ) (t : Fin n → Fin n → ℝ)
+    (a b : Fin n → ℝ) (hu : ∀ j, 1 - u j ^ 2 = a j ^ 2 + b j ^ 2)
+    (ht : ∀ j l, t j l - u j * u l = a j * a l + b j * b l)
+    (w : Fin (9 - k) → ℝ) :
+    0 ≤ ∑ j, ∑ l, w ⬝ᵥ (Y3 k (u j) (u l) (t j l)).mulVec w := by
+  have key : ∀ j l, w ⬝ᵥ (Y3 k (u j) (u l) (t j l)).mulVec w
+      = (∑ p, w p * u j ^ (p : ℕ)) * (∑ p, w p * u l ^ (p : ℕ))
+        * (C1 k (a j) (b j) * C1 k (a l) (b l) + S1 k (a j) (b j) * S1 k (a l) (b l)) := by
+    intro j l
+    rw [← Q3_addition k hk (u j) (u l) (t j l) (a j) (b j) (a l) (b l) (hu j) (hu l) (ht j l)]
+    simp only [dotProduct, mulVec, Y3, Matrix.of_apply]
+    rw [Finset.sum_mul_sum, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun p _ => ?_
+    rw [Finset.mul_sum, Finset.sum_mul]
+    refine Finset.sum_congr rfl fun q _ => ?_
+    ring
+  simp only [key]
+  have hsq : ∀ (g c s : Fin n → ℝ), ∑ j, ∑ l, g j * g l * (c j * c l + s j * s l)
+      = (∑ j, g j * c j) ^ 2 + (∑ j, g j * s j) ^ 2 := by
+    intro g c s
+    simp only [sq, Finset.sum_mul_sum, ← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun j _ => Finset.sum_congr rfl fun l _ => ?_
+    ring
+  rw [hsq (fun j => ∑ p, w p * u j ^ (p : ℕ)) (fun j => C1 k (a j) (b j)) (fun j => S1 k (a j) (b j))]
+  positivity
+
+/-- Relabelling lemmas for triple sums. -/
+theorem tsum_swap12 {ι : Type*} [Fintype ι] (g : ι → ι → ι → ℝ) :
+    ∑ i, ∑ j, ∑ l, g i j l = ∑ i, ∑ j, ∑ l, g j i l := by
+  rw [Finset.sum_comm]
+theorem tsum_swap23 {ι : Type*} [Fintype ι] (g : ι → ι → ι → ℝ) :
+    ∑ i, ∑ j, ∑ l, g i j l = ∑ i, ∑ j, ∑ l, g i l j := by
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [Finset.sum_comm]
+
+/-- The symmetrised triple sum equals the unsymmetrised one: each permutation of `(u,v,t)` is a
+relabelling of `(i,j,l)`. -/
+theorem sum_S3_eq_sum_Y3 (k : ℕ) {n : ℕ} (t : Fin n → Fin n → ℝ) (hsym : ∀ i j, t j i = t i j)
+    (w : Fin (9 - k) → ℝ) :
+    ∑ i, ∑ j, ∑ l, w ⬝ᵥ (S3 k (t i j) (t i l) (t j l)).mulVec w
+      = ∑ i, ∑ j, ∑ l, w ⬝ᵥ (Y3 k (t i j) (t i l) (t j l)).mulVec w := by
+  set Φ : Fin n → Fin n → Fin n → ℝ :=
+    fun i j l => w ⬝ᵥ (Y3 k (t i j) (t i l) (t j l)).mulVec w with hΦ
+  have expand : ∀ i j l, w ⬝ᵥ (S3 k (t i j) (t i l) (t j l)).mulVec w
+      = (1 / 6 : ℝ) * (Φ i j l + Φ j i l + Φ i l j + Φ l i j + Φ j l i + Φ l j i) := by
+    intro i j l
+    simp only [S3, Matrix.smul_mulVec, Matrix.add_mulVec, dotProduct_smul, dotProduct_add,
+      smul_eq_mul, hΦ, hsym]
+  have e1 : ∑ i, ∑ j, ∑ l, Φ j i l = ∑ i, ∑ j, ∑ l, Φ i j l := (tsum_swap12 Φ).symm
+  have e2 : ∑ i, ∑ j, ∑ l, Φ i l j = ∑ i, ∑ j, ∑ l, Φ i j l := (tsum_swap23 Φ).symm
+  have e3 : ∑ i, ∑ j, ∑ l, Φ l i j = ∑ i, ∑ j, ∑ l, Φ i j l := by
+    rw [tsum_swap23 (fun i j l => Φ l i j)]; exact (tsum_swap12 Φ).symm
+  have e4 : ∑ i, ∑ j, ∑ l, Φ j l i = ∑ i, ∑ j, ∑ l, Φ i j l := by
+    rw [tsum_swap12 (fun i j l => Φ j l i)]; exact (tsum_swap23 Φ).symm
+  have e5 : ∑ i, ∑ j, ∑ l, Φ l j i = ∑ i, ∑ j, ∑ l, Φ i j l := by
+    rw [tsum_swap12 (fun i j l => Φ l j i), tsum_swap23 (fun i j l => Φ l i j)]
+    exact (tsum_swap12 Φ).symm
+  simp only [expand, ← Finset.mul_sum, Finset.sum_add_distrib, e1, e2, e3, e4, e5]
+  ring
+
+/-- Every unit vector of `ℝ³` has an orthonormal frame of its orthogonal complement, giving
+tangent-plane coordinates with Parseval's identity: extend `{x}` to an orthonormal basis. -/
+theorem exists_tangent_frame (x : EuclideanSpace ℝ (Fin 3)) (hx : ‖x‖ = 1) :
+    ∃ e₁ e₂ : EuclideanSpace ℝ (Fin 3), ∀ y z : EuclideanSpace ℝ (Fin 3), ‖y‖ = 1 → ‖z‖ = 1 →
+      (1 - ⟪x, y⟫ ^ 2 = ⟪e₁, y⟫ ^ 2 + ⟪e₂, y⟫ ^ 2) ∧
+      (⟪y, z⟫ - ⟪x, y⟫ * ⟪x, z⟫ = ⟪e₁, y⟫ * ⟪e₁, z⟫ + ⟪e₂, y⟫ * ⟪e₂, z⟫) := by
+  have hcard : Module.finrank ℝ (EuclideanSpace ℝ (Fin 3)) = Fintype.card (Fin 3) := by simp
+  let v : Fin 3 → EuclideanSpace ℝ (Fin 3) := fun _ => x
+  have hv : Orthonormal ℝ (({0} : Set (Fin 3)).domRestrict v) := by
+    rw [orthonormal_iff_ite]
+    intro i j
+    have hij : i = j := Subtype.ext (by
+      have hi := i.2; have hj := j.2
+      simp only [Set.mem_singleton_iff] at hi hj
+      rw [hi, hj])
+    subst hij
+    simp [Set.domRestrict, v, real_inner_self_eq_norm_sq, hx]
+  obtain ⟨b, hb⟩ := Orthonormal.exists_orthonormalBasis_extension_of_card_eq hcard hv
+  have hb0 : b 0 = x := hb 0 (Set.mem_singleton 0)
+  refine ⟨b 1, b 2, fun y z hy hz => ?_⟩
+  have P := b.sum_inner_mul_inner y z
+  have Py := b.sum_inner_mul_inner y y
+  rw [Fin.sum_univ_three, hb0] at P Py
+  rw [real_inner_self_eq_norm_sq, hy] at Py
+  have c1 : ⟪y, x⟫ = ⟪x, y⟫ := real_inner_comm _ _
+  have c2 : ⟪y, b 1⟫ = ⟪b 1, y⟫ := real_inner_comm _ _
+  have c3 : ⟪y, b 2⟫ = ⟪b 2, y⟫ := real_inner_comm _ _
+  rw [c1, c2, c3] at P Py
+  constructor
+  · linear_combination -Py
+  · linear_combination -P
+
+/-- **Bachoc–Vallentin positivity for `S²`, `k ≤ 5`** — from the addition theorem, the
+sum-of-squares structure, the relabelling, and the tangent frame. -/
+theorem bv_positivity (k : Fin 6) {n : ℕ} (x : Fin n → EuclideanSpace ℝ (Fin 3))
+    (hx : OnSphere x) (w : Fin (9 - (k : ℕ)) → ℝ) :
+    0 ≤ ∑ i, ∑ j, ∑ l, w ⬝ᵥ (S3 (k : ℕ) ⟪x i, x j⟫ ⟪x i, x l⟫ ⟪x j, x l⟫).mulVec w := by
+  have hsym : ∀ i j, ⟪x j, x i⟫ = ⟪x i, x j⟫ := fun i j => real_inner_comm _ _
+  have e := sum_S3_eq_sum_Y3 (k : ℕ) (fun i j => ⟪x i, x j⟫) hsym w
+  beta_reduce at e
+  rw [e]
+  refine Finset.sum_nonneg fun i _ => ?_
+  obtain ⟨e₁, e₂, hfr⟩ := exists_tangent_frame (x i) (hx i)
+  exact quad_Y3_nonneg (k : ℕ) (Nat.lt_succ_iff.mp k.isLt) (fun j => ⟪x i, x j⟫)
+    (fun j l => ⟪x j, x l⟫) (fun j => ⟪e₁, x j⟫) (fun j => ⟪e₂, x j⟫)
+    (fun j => (hfr (x j) (x j) (hx j) (hx j)).1)
+    (fun j l => (hfr (x j) (x l) (hx j) (hx l)).2) w
+
+
+/-- **A three-point certificate.**  The data of the Cohn–Woo-type bound of blueprint §12, with
+the four properties the bound needs.  `pair` and `tri` are required only on the range
+`t ≤ 0.5373` that `separation_of_energy_le` guarantees for a near-optimal configuration
+(`t < 1 - 0.962²/2 = 0.537278`). -/
+structure ThreePointCert where
+  a0 : ℝ
+  a1 : ℝ
+  lam : ℝ
+  L : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 - (k : ℕ))) ℝ
+  D : (k : Fin 6) → Fin (9 - (k : ℕ)) → ℝ
+  D_nonneg : ∀ k r, 0 ≤ D k r
+  a1_nonneg : 0 ≤ a1
+  lam_nonneg : 0 ≤ lam
+  lam_le : lam ≤ 1 / 18
+  pair : ∀ t : ℝ, -1 ≤ t → t ≤ 5373 / 10000 →
+    a0 + a1 * t + 3 * Fsum L D 1 t t ≤ (1 - 18 * lam) * (Real.sqrt (2 - 2 * t))⁻¹
+  tri : ∀ u v t : ℝ, -1 ≤ u → -1 ≤ v → -1 ≤ t →
+    u ≤ 5373 / 10000 → v ≤ 5373 / 10000 → t ≤ 5373 / 10000 →
+    0 ≤ 1 + 2 * u * v * t - u ^ 2 - v ^ 2 - t ^ 2 →
+    Fsum L D u v t ≤ lam * ((Real.sqrt (2 - 2 * u))⁻¹ + (Real.sqrt (2 - 2 * v))⁻¹
+      + (Real.sqrt (2 - 2 * t))⁻¹)
+  bound_ge : antiprismEnergy uStar ≤ (64 * a0 - 8 * (a0 + a1) - 8 * Fsum L D 1 1 1) / 2
+
+/-! ### The one remaining leaf, as explicit polynomial obligations
+
+`exists_threePointCert` asks for data `(a₀, a₁, λ, L, D)` with `D ≥ 0`, the bound, and the two
+inequalities `pair` and `tri`.  The next two lemmas restate `pair` and `tri` as polynomial
+inequalities in chord lengths — the precise shape that a Bernstein certificate (`pair`, one
+variable, as in `yudinF12_le_inv`) and a 3-dimensional interval verification (`tri`) must
+establish; blueprint §12.7, steps 2–4. -/
+
+/-- The `pair` obligation as a polynomial inequality in the chord length `s = √(2−2t)`:
+it suffices that `(1 − 18λ) − s·[a₀ + a₁ t + 3F(1,t,t)] ≥ 0` for `s ∈ [0.96, 2]`, `t = 1 − s²/2`. -/
+theorem pair_of_poly (L : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 - (k : ℕ))) ℝ)
+    (D : (k : Fin 6) → Fin (9 - (k : ℕ)) → ℝ) (a0 a1 lam : ℝ)
+    (h : ∀ s : ℝ, 24 / 25 ≤ s → s ≤ 2 →
+      0 ≤ (1 - 18 * lam) - s * (a0 + a1 * (1 - s ^ 2 / 2) + 3 * Fsum L D 1 (1 - s ^ 2 / 2) (1 - s ^ 2 / 2))) :
+    ∀ t : ℝ, -1 ≤ t → t ≤ 5373 / 10000 →
+      a0 + a1 * t + 3 * Fsum L D 1 t t ≤ (1 - 18 * lam) * (Real.sqrt (2 - 2 * t))⁻¹ := by
+  intro t ht1 ht2
+  set s := Real.sqrt (2 - 2 * t) with hs
+  have h2t : 0 ≤ 2 - 2 * t := by linarith
+  have hs2 : s ^ 2 = 2 - 2 * t := Real.sq_sqrt h2t
+  have hspos : 0 < s := Real.sqrt_pos.mpr (by linarith)
+  have hslo : 24 / 25 ≤ s := by
+    rw [hs, Real.le_sqrt (by norm_num) h2t]; linarith
+  have hshi : s ≤ 2 := by
+    rw [hs, Real.sqrt_le_left (by norm_num)]; linarith
+  have ht : t = 1 - s ^ 2 / 2 := by linarith
+  have key := h s hslo hshi
+  rw [← ht] at key
+  rw [le_mul_inv_iff₀ hspos]
+  linarith
+
+/-- The `tri` obligation as a polynomial inequality in the three chord lengths `p, q, r`:
+`λ(qr + pr + pq) − pqr·F ≥ 0` where `u = 1 − p²/2` etc. -/
+theorem tri_of_poly (L : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 - (k : ℕ))) ℝ)
+    (D : (k : Fin 6) → Fin (9 - (k : ℕ)) → ℝ) (lam : ℝ)
+    (h : ∀ p q r : ℝ, 24 / 25 ≤ p → 24 / 25 ≤ q → 24 / 25 ≤ r → p ≤ 2 → q ≤ 2 → r ≤ 2 →
+      0 ≤ 1 + 2 * (1 - p ^ 2 / 2) * (1 - q ^ 2 / 2) * (1 - r ^ 2 / 2)
+          - (1 - p ^ 2 / 2) ^ 2 - (1 - q ^ 2 / 2) ^ 2 - (1 - r ^ 2 / 2) ^ 2 →
+      0 ≤ lam * (q * r + p * r + p * q)
+          - p * q * r * Fsum L D (1 - p ^ 2 / 2) (1 - q ^ 2 / 2) (1 - r ^ 2 / 2)) :
+    ∀ u v t : ℝ, -1 ≤ u → -1 ≤ v → -1 ≤ t →
+      u ≤ 5373 / 10000 → v ≤ 5373 / 10000 → t ≤ 5373 / 10000 →
+      0 ≤ 1 + 2 * u * v * t - u ^ 2 - v ^ 2 - t ^ 2 →
+      Fsum L D u v t ≤ lam * ((Real.sqrt (2 - 2 * u))⁻¹ + (Real.sqrt (2 - 2 * v))⁻¹
+        + (Real.sqrt (2 - 2 * t))⁻¹) := by
+  intro u v t hu1 hv1 ht1 hu2 hv2 ht2 hdet
+  set p := Real.sqrt (2 - 2 * u) with hp
+  set q := Real.sqrt (2 - 2 * v) with hq
+  set r := Real.sqrt (2 - 2 * t) with hr
+  have hp2 : p ^ 2 = 2 - 2 * u := Real.sq_sqrt (by linarith)
+  have hq2 : q ^ 2 = 2 - 2 * v := Real.sq_sqrt (by linarith)
+  have hr2 : r ^ 2 = 2 - 2 * t := Real.sq_sqrt (by linarith)
+  have hpp : 0 < p := Real.sqrt_pos.mpr (by linarith)
+  have hqp : 0 < q := Real.sqrt_pos.mpr (by linarith)
+  have hrp : 0 < r := Real.sqrt_pos.mpr (by linarith)
+  have hu : u = 1 - p ^ 2 / 2 := by linarith
+  have hv : v = 1 - q ^ 2 / 2 := by linarith
+  have ht : t = 1 - r ^ 2 / 2 := by linarith
+  have lo : ∀ w : ℝ, w ≤ 5373 / 10000 → 24 / 25 ≤ Real.sqrt (2 - 2 * w) := fun w hw => by
+    rw [Real.le_sqrt (by norm_num) (by linarith)]; linarith
+  have hi : ∀ w : ℝ, -1 ≤ w → Real.sqrt (2 - 2 * w) ≤ 2 := fun w hw => by
+    rw [Real.sqrt_le_left (by norm_num)]; linarith
+  have key := h p q r (lo u hu2) (lo v hv2) (lo t ht2) (hi u hu1) (hi v hv1) (hi t ht1)
+    (by rw [← hu, ← hv, ← ht]; exact hdet)
+  rw [← hu, ← hv, ← ht] at key
+  have hpqr : 0 < p * q * r := by positivity
+  rw [inv_eq_one_div, inv_eq_one_div, inv_eq_one_div]
+  rw [show lam * (1 / p + 1 / q + 1 / r) = lam * (q * r + p * r + p * q) / (p * q * r) by
+    field_simp]
+  rw [le_div_iff₀ hpqr]
+  linarith
+
+/-- The Gram determinant of three unit vectors in `ℝ³` is a square, hence nonnegative. -/
+theorem gram_det_nonneg (x y z : EuclideanSpace ℝ (Fin 3)) (hx : ‖x‖ = 1) (hy : ‖y‖ = 1)
+    (hz : ‖z‖ = 1) :
+    0 ≤ 1 + 2 * ⟪x, y⟫ * ⟪x, z⟫ * ⟪y, z⟫ - ⟪x, y⟫ ^ 2 - ⟪x, z⟫ ^ 2 - ⟪y, z⟫ ^ 2 := by
+  have hx' := normsq_coords x hx; have hy' := normsq_coords y hy; have hz' := normsq_coords z hz
+  rw [inner_coords, inner_coords, inner_coords]
+  have key : 1 + 2 * (x 0 * y 0 + x 1 * y 1 + x 2 * y 2) * (x 0 * z 0 + x 1 * z 1 + x 2 * z 2)
+        * (y 0 * z 0 + y 1 * z 1 + y 2 * z 2) - (x 0 * y 0 + x 1 * y 1 + x 2 * y 2) ^ 2
+        - (x 0 * z 0 + x 1 * z 1 + x 2 * z 2) ^ 2 - (y 0 * z 0 + y 1 * z 1 + y 2 * z 2) ^ 2
+      = (x 0 * (y 1 * z 2 - y 2 * z 1) - x 1 * (y 0 * z 2 - y 2 * z 0)
+          + x 2 * (y 0 * z 1 - y 1 * z 0)) ^ 2 := by
+    linear_combination
+      (2*y 0^2*z 0^2 - y 0^2 + 2*y 0*y 1*z 0*z 1 + 2*y 0*y 2*z 0*z 2 - y 1^2*z 2^2
+        + 2*y 1*y 2*z 1*z 2 - y 2^2*z 1^2 - z 0^2) * hx'
+      + (2*x 0*x 1*z 0*z 1 + 2*x 0*x 2*z 0*z 2 - 2*x 1^2*z 0^2 - x 1^2*z 2^2 + x 1^2
+        + 2*x 1*x 2*z 1*z 2 - 2*x 2^2*z 0^2 - x 2^2*z 1^2 + x 2^2 + z 0^2 - 1) * hy'
+      + (2*x 0*x 1*y 0*y 1 + 2*x 0*x 2*y 0*y 2 + 2*x 1^2*y 1^2 + x 1^2*y 2^2 - x 1^2
+        + 2*x 1*x 2*y 1*y 2 + x 2^2*y 1^2 + 2*x 2^2*y 2^2 - x 2^2 - y 1^2 - y 2^2) * hz'
+  rw [key]; positivity
+
+/-- Splitting a triple sum by coincidences of the indices. -/
+theorem sum_triple_split {ι : Type*} [Fintype ι] [DecidableEq ι] (f : ι → ι → ι → ℝ) :
+    ∑ i, ∑ j, ∑ l, f i j l
+      = ∑ i, f i i i + ∑ i, ∑ j ∈ univ.erase i, (f i i j + f i j i + f i j j)
+        + ∑ i, ∑ j ∈ univ.erase i, ∑ l ∈ (univ.erase i).erase j, f i j l := by
+  have inner : ∀ i j, j ≠ i →
+      ∑ l, f i j l = f i j i + f i j j + ∑ l ∈ (univ.erase i).erase j, f i j l := by
+    intro i j hji
+    rw [← Finset.add_sum_erase _ _ (Finset.mem_univ i),
+      ← Finset.add_sum_erase _ _ (Finset.mem_erase.mpr ⟨hji, Finset.mem_univ j⟩)]
+    ring
+  have mid : ∀ i, ∑ j, ∑ l, f i j l
+      = (f i i i + ∑ l ∈ univ.erase i, f i i l)
+        + ∑ j ∈ univ.erase i, (f i j i + f i j j + ∑ l ∈ (univ.erase i).erase j, f i j l) := by
+    intro i
+    rw [← Finset.add_sum_erase _ _ (Finset.mem_univ i),
+      ← Finset.add_sum_erase _ _ (Finset.mem_univ i)]
+    congr 1
+    exact Finset.sum_congr rfl fun j hj => inner i j (Finset.ne_of_mem_erase hj)
+  simp only [mid, Finset.sum_add_distrib]
+  ring
+
+/-- Pulling an outer index through a triple sum. -/
+theorem sum_swap_out {ι κ : Type*} [Fintype ι] [Fintype κ] (f : ι → ι → ι → κ → ℝ) :
+    ∑ i, ∑ j, ∑ l, ∑ k, f i j l k = ∑ k, ∑ i, ∑ j, ∑ l, f i j l k := by
+  have e1 : ∀ i j, ∑ l, ∑ k, f i j l k = ∑ k, ∑ l, f i j l k := fun i j => Finset.sum_comm
+  have e2 : ∀ i, ∑ j, ∑ k, ∑ l, f i j l k = ∑ k, ∑ j, ∑ l, f i j l k := fun i => Finset.sum_comm
+  have e3 : ∑ i, ∑ k, ∑ j, ∑ l, f i j l k = ∑ k, ∑ i, ∑ j, ∑ l, f i j l k := Finset.sum_comm
+  rw [← e3]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [← e2]
+  exact Finset.sum_congr rfl fun j _ => e1 i j
+
+/-- Over the distinct ordered triples, the three edge sums coincide. -/
+theorem sum_distinct_swap23 {ι : Type*} [Fintype ι] [DecidableEq ι] (g : ι → ι → ℝ) :
+    ∑ i, ∑ j ∈ univ.erase i, ∑ l ∈ (univ.erase i).erase j, g i l
+      = ∑ i, ∑ j ∈ univ.erase i, ∑ l ∈ (univ.erase i).erase j, g i j := by
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [Finset.sum_comm' (t' := univ.erase i) (s' := fun l => (univ.erase i).erase l)]
+  intro j l
+  simp only [Finset.mem_erase, Finset.mem_univ, and_true]
+  tauto
+
+theorem sum_distinct_swap12 {ι : Type*} [Fintype ι] [DecidableEq ι] (g : ι → ι → ℝ) :
+    ∑ i, ∑ j ∈ univ.erase i, ∑ l ∈ (univ.erase i).erase j, g j l
+      = ∑ i, ∑ j ∈ univ.erase i, ∑ l ∈ (univ.erase i).erase j, g i l := by
+  rw [Finset.sum_comm' (t' := univ) (s' := fun j => univ.erase j)]
+  · refine Finset.sum_congr rfl fun j _ => Finset.sum_congr rfl fun i _ => ?_
+    rw [Finset.erase_right_comm]
+  · intro i j
+    simp only [Finset.mem_erase, Finset.mem_univ, and_true, true_and]
+    exact ⟨fun h => h.symm, fun h => h.symm⟩
+
+theorem sum_distinct_const {ι : Type*} [Fintype ι] [DecidableEq ι] (g : ι → ι → ℝ) :
+    ∑ i, ∑ j ∈ univ.erase i, ∑ l ∈ (univ.erase i).erase j, g i j
+      = ((Fintype.card ι : ℝ) - 2) * ∑ i, ∑ j ∈ univ.erase i, g i j := by
+  rw [Finset.mul_sum]
+  refine Finset.sum_congr rfl fun i _ => ?_
+  rw [Finset.mul_sum]
+  refine Finset.sum_congr rfl fun j hj => ?_
+  rw [Finset.sum_const, Finset.card_erase_of_mem hj, Finset.card_erase_of_mem (Finset.mem_univ i),
+    Finset.card_univ, nsmul_eq_mul]
+  have : 2 ≤ Fintype.card ι := by
+    have := Finset.card_pos.mpr ⟨j, hj⟩
+    rw [Finset.card_erase_of_mem (Finset.mem_univ i), Finset.card_univ] at this
+    omega
+  push_cast [Nat.cast_sub (by omega : 1 ≤ Fintype.card ι), Nat.cast_sub (by omega : 1 ≤ Fintype.card ι - 1)]
+  ring
+
+/-- **The three-point bound** (blueprint §12.2).  Any certificate bounds the energy of every
+configuration whose pairwise inner products stay in the certified range. -/
+theorem three_point_bound (C : ThreePointCert) (x : Fin 8 → EuclideanSpace ℝ (Fin 3))
+    (hx : Admissible x) (hsep : ∀ i j, i ≠ j → ⟪x i, x j⟫ ≤ 5373 / 10000) :
+    (64 * C.a0 - 8 * (C.a0 + C.a1) - 8 * Fsum C.L C.D 1 1 1) / 2 ≤ energy x := by
+  obtain ⟨hsph, -⟩ := hx
+  -- notation
+  set F : ℝ → ℝ → ℝ → ℝ := Fsum C.L C.D with hF
+  set t : Fin 8 → Fin 8 → ℝ := fun i j => ⟪x i, x j⟫ with ht
+  set h : Fin 8 → Fin 8 → ℝ := fun i j => ‖x i - x j‖⁻¹ with hh
+  have htt : ∀ i, t i i = 1 := fun i => by
+    simp only [ht, real_inner_self_eq_norm_sq, hsph i, one_pow]
+  have hsym : ∀ i j, t j i = t i j := fun i j => real_inner_comm _ _
+  have hge : ∀ i j, -1 ≤ t i j := fun i j => by
+    have := abs_real_inner_le_norm (x i) (x j)
+    rw [hsph i, hsph j, one_mul] at this
+    exact (abs_le.mp this).1
+  have hsqrt : ∀ i j, (Real.sqrt (2 - 2 * t i j))⁻¹ = h i j := fun i j => by
+    have := inner_eq_of_norm (x i) (x j) (hsph i) (hsph j)
+    simp only [ht, hh]
+    rw [this, show 2 - 2 * (1 - ‖x i - x j‖ ^ 2 / 2) = ‖x i - x j‖ ^ 2 by ring,
+      Real.sqrt_sq (norm_nonneg _)]
+  -- (1) Bachoc–Vallentin positivity, weighted by the certificate
+  have hBV : 0 ≤ ∑ i, ∑ j, ∑ l, F (t i j) (t i l) (t j l) := by
+    simp only [hF, Fsum]
+    rw [sum_swap_out]
+    refine Finset.sum_nonneg fun k _ => ?_
+    rw [sum_swap_out]
+    refine Finset.sum_nonneg fun r _ => ?_
+    simp only [← Finset.mul_sum]
+    exact mul_nonneg (C.D_nonneg k r) (bv_positivity k x hsph (C.L k r))
+  -- (2) split by coincidences
+  rw [sum_triple_split] at hBV
+  -- (3a) the two-equal terms, from the pair inequality
+  have hpair : ∀ i j, j ≠ i → F (t i i) (t i j) (t i j) + F (t i j) (t i i) (t j i)
+      + F (t i j) (t i j) (t j j) ≤ (1 - 18 * C.lam) * h i j - C.a0 - C.a1 * t i j := by
+    intro i j hji
+    have h1 := C.pair (t i j) (hge i j) (hsep i j (Ne.symm hji))
+    rw [hsqrt] at h1
+    have e1 : F (t i j) (t i i) (t j i) = F (t i i) (t i j) (t i j) := by
+      rw [hsym, htt, hF, Fsum_swap12]
+    have e2 : F (t i j) (t i j) (t j j) = F (t i i) (t i j) (t i j) := by
+      rw [htt, htt, hF, Fsum_swap23, Fsum_swap12]
+    rw [e1, e2, htt]
+    linarith
+  -- (3b) the distinct terms, from the triangle inequality
+  have htri : ∀ i j l, j ≠ i → l ≠ i → l ≠ j →
+      F (t i j) (t i l) (t j l) ≤ C.lam * (h i j + h i l + h j l) := by
+    intro i j l hji hli hlj
+    have := C.tri (t i j) (t i l) (t j l) (hge i j) (hge i l) (hge j l)
+      (hsep i j (Ne.symm hji)) (hsep i l (Ne.symm hli)) (hsep j l (Ne.symm hlj))
+      (gram_det_nonneg (x i) (x j) (x l) (hsph i) (hsph j) (hsph l))
+    rwa [hsqrt, hsqrt, hsqrt] at this
+  -- (4) sum the bounds
+  have hdiag : ∑ i : Fin 8, F (t i i) (t i i) (t i i) = 8 * F 1 1 1 := by
+    simp only [htt, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    push_cast; ring
+  have hmid : ∑ i, ∑ j ∈ univ.erase i, (F (t i i) (t i j) (t i j) + F (t i j) (t i i) (t j i)
+        + F (t i j) (t i j) (t j j))
+      ≤ ∑ i, ∑ j ∈ univ.erase i, ((1 - 18 * C.lam) * h i j - C.a0 - C.a1 * t i j) :=
+    Finset.sum_le_sum fun i _ => Finset.sum_le_sum fun j hj =>
+      hpair i j (Finset.ne_of_mem_erase hj)
+  have hdist : ∑ i, ∑ j ∈ univ.erase i, ∑ l ∈ (univ.erase i).erase j, F (t i j) (t i l) (t j l)
+      ≤ ∑ i, ∑ j ∈ univ.erase i, ∑ l ∈ (univ.erase i).erase j,
+          C.lam * (h i j + h i l + h j l) :=
+    Finset.sum_le_sum fun i _ => Finset.sum_le_sum fun j hj => Finset.sum_le_sum fun l hl =>
+      htri i j l (Finset.ne_of_mem_erase hj) (Finset.ne_of_mem_erase (Finset.mem_of_mem_erase hl))
+        (Finset.ne_of_mem_erase hl)
+  -- the distinct edge sums
+  set A : ℝ := ∑ i, ∑ j ∈ univ.erase i, h i j with hA
+  have hE : energy x = (1 / 2) * A := energy_eq_half x
+  have hdist' : ∑ i, ∑ j ∈ univ.erase i, ∑ l ∈ (univ.erase i).erase j,
+      C.lam * (h i j + h i l + h j l) = C.lam * (18 * A) := by
+    simp only [mul_add, Finset.sum_add_distrib, ← Finset.mul_sum]
+    rw [sum_distinct_swap23 h, sum_distinct_swap12 h, sum_distinct_swap23 h, sum_distinct_const h]
+    simp only [Fintype.card_fin]; push_cast; ring
+  -- Schoenberg at degree 1
+  set T : ℝ := ∑ i, ∑ j ∈ univ.erase i, t i j with hT
+  have hT8 : -8 ≤ T := by
+    have h0 := sum_P1_nonneg x
+    have hsplit : ∑ i, ∑ j, ⟪x i, x j⟫ = ∑ i, (t i i + ∑ j ∈ univ.erase i, t i j) :=
+      Finset.sum_congr rfl fun i _ => (Finset.add_sum_erase _ _ (Finset.mem_univ i)).symm
+    rw [hsplit] at h0
+    simp only [htt, Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+      nsmul_eq_mul] at h0
+    push_cast at h0
+    linarith
+  have hmid' : ∑ i, ∑ j ∈ univ.erase i, ((1 - 18 * C.lam) * h i j - C.a0 - C.a1 * t i j)
+      = (1 - 18 * C.lam) * A - 56 * C.a0 - C.a1 * T := by
+    simp only [Finset.sum_sub_distrib, ← Finset.mul_sum, Finset.sum_const,
+      Finset.card_erase_of_mem (Finset.mem_univ _), Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    push_cast; ring
+  have ha1T : -8 * C.a1 ≤ C.a1 * T := by nlinarith [C.a1_nonneg, hT8]
+  rw [hdiag] at hBV
+  rw [hE]
+  linarith [hBV, hmid, hdist, hdist', hmid', ha1T]
+
+/-- The raw data of a three-point certificate, without the properties (the properties are
+Tasks 2–6 below). -/
+structure ThreePointCertData where
+  a0 : ℝ
+  a1 : ℝ
+  lam : ℝ
+  L : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 - (k : ℕ))) ℝ
+  D : (k : Fin 6) → Fin (9 - (k : ℕ)) → ℝ
+
+/-! ### The remaining leaf, split into independently fillable tasks
+
+Everything below the line `-- TASKS` is what remains to prove the N = 8 Thomson problem.  The
+numerical certificate is `threepoint/certificate_pd.json` (double precision; re-solved at the
+Lean range `t ≤ 0.5373` as `certificate_r5373.json`) and its 50-digit exactly-tight projection
+`certificate_*_hp.json`; blueprint §12 records everything known about it:
+
+* `f(t) = a₀ + a₁ t` only (`a₀ ≈ 0.9495, a₁ ≈ 0.2796`), `λ ≈ 0.01016`;
+* `F_k = L_kᵀ D_k L_k` for `k = 0,…,5`, block sizes `9,8,7,6,5,4`, each `F_k` of corank exactly
+  one: `F_k v_k = 0` for the explicit vectors `v_k(u*)` of
+  `threepoint/kernel_vectors_exact.json` — rational functions of `u*` with rational
+  coefficients (no `√2`), e.g. `v₀ = (1, 0, (3u²−2u+1)/2, 0, (35u⁴−60u³+42u²−12u+3)/8, …)`;
+* the pair polynomial has double zeros at the four antiprism distances
+  `s ∈ {1.17125, 1.28769, 1.65639, 1.89689}` (i.e. `t ∈ {u*, (1−u*)/√2 − u*, 2u*−1, −(1−u*)/√2 − u*}`),
+  with `P″(s_i) ∈ [0.0067, 0.074]`;
+* the triangle slack vanishes with zero gradient and positive-definite Hessian
+  (`⪰ 2·10⁻⁴ I`) at the five antiprism triangle types, and is `> 0` elsewhere on
+  `Δ ∩ [−1, 0.5373]³` (verified on 217 397 grid points and locally to spacing 0.004);
+* `u*` is the root in `[0.3140, 0.3142]` of `antiprismEnergy'` (`antiprismEnergy'_uStar`), of
+  degree 12 over `ℚ(√2)`; the chord lengths `√2·√(1−u*)`, `2√(1−u*)`,
+  `√(2 + 2u* ∓ √2(1−u*))` generate the field the exact data lives in.
+
+**Why the data cannot be rational.**  A rational certificate proves `E ≥ E(u*) − ε`, never
+`E ≥ E(u*)`: exact tightness at the antiprism forces the data into the number field.  In Lean
+the natural route is not to build that field but to carry `u*, √2, r := √(1−u*), h := √u*` and
+the two cross-distance roots as real numbers with their polynomial relations
+(`antiprismEnergy'_uStar`, `r² = 1 − u*`, …) and to verify identities by `linear_combination`
+modulo those relations.  The task list below is arranged so that Tasks 2–5 are independent of
+each other once Task 1 has fixed the data. -/
+
+-- TASKS ------------------------------------------------------------------------------------
+
+/-- **Task 1 — the data.**  Produce the exact certificate data.  Recipe: start from
+`threepoint/certificate_r5373_hp.json` (50 digits, exactly tight at the antiprism), express every
+entry as an element of `ℚ(√2, u*, r, h, s₂, s₄)` by projecting onto the affine tightness space
+of `threepoint/hp_project.py` in exact arithmetic (the kernel constraints are linear over
+`ℚ(u*)`; the double-zero and triangle-tightness constraints are linear over the full field), then
+write the result here as explicit real-number expressions in `uStar`, `Real.sqrt 2`,
+`Real.sqrt (1 - uStar)`, `Real.sqrt uStar` and the two cross roots.  Keep the LDLᵀ form so that
+Task 2 is a sign check on `D` only. -/
+noncomputable def certData : ThreePointCertData := sorry
+
+/-- **Task 2 — positivity of `D`.**  The six diagonal blocks of the LDLᵀ form.  Each entry is an
+explicit algebraic number; prove `0 ≤ D k r` by rational interval bounds on `uStar`
+(`uStar_mem_Icc : u* ∈ [0.3140, 0.3142]`) and on the square roots (`sqrt2_bounds` and the same
+pattern), then `nlinarith`/`norm_num`.  Margin: the numerical `D` has all entries `≥ 1.5e−3`
+relative to the block norms. -/
+theorem certData_D_nonneg : ∀ k r, 0 ≤ certData.D k r := sorry
+
+/-- **Task 3 — the bound.**  `antiprismEnergy uStar ≤ (64a₀ − 8(a₀+a₁) − 8F(1,1,1))/2`.  With
+exact data this is an *equality* modulo the relations (the certificate is tight); prove it by
+`linear_combination` with the relations `antiprismEnergy'_uStar`, `r² = 1 − u*`, `h² = u*`, and
+the closed form `antiprism_energy_eq` of `E(u*)`.  Alternatively, prove the strict rational
+inequality `19.6752878612 ≤ bound` if the data is chosen with a tiny positive margin and
+combine with `antiprismEnergy_uStar_lt`-style bounds — but note that route needs a certificate
+tight at `u*` anyway (see the note above). -/
+theorem certData_bound :
+    antiprismEnergy uStar ≤ (64 * certData.a0 - 8 * (certData.a0 + certData.a1)
+      - 8 * Fsum certData.L certData.D 1 1 1) / 2 := sorry
+
+/-- **Task 4 — the pair inequality**, in the polynomial form of `pair_of_poly`.  One variable.
+Recipe (the `yudinF12_le_inv` pattern): show
+`(1 − 18λ) − s·[a₀ + a₁(1−s²/2) + 3F(1, 1−s²/2, 1−s²/2)] = Π_{i=1}^{4} (s − s_i)² · Q(s)`
+with `Q` written in the Bernstein basis on `[24/25, 2]` with nonnegative coefficients; the
+`s_i` are the four antiprism chord lengths.  The identity is checked by `ring` modulo the
+field relations; the sign by `positivity` on each Bernstein term. -/
+theorem certData_pair_poly : ∀ s : ℝ, 24 / 25 ≤ s → s ≤ 2 →
+    0 ≤ (1 - 18 * certData.lam) - s * (certData.a0 + certData.a1 * (1 - s ^ 2 / 2)
+      + 3 * Fsum certData.L certData.D 1 (1 - s ^ 2 / 2) (1 - s ^ 2 / 2)) := sorry
+
+/-- **Task 5 — the triangle inequality**, in the polynomial form of `tri_of_poly`.  Three
+variables; the only genuinely new piece.  Recipe: (i) at each of the five antiprism triangle
+types the polynomial vanishes with zero gradient; prove the Hessian there is `⪰ η I`
+(`η = 2·10⁻⁴` numerically) and bound the third derivatives on a ball of radius `ρ` (numerically
+`|D³| ≤ 0.26` near the types, so `ρ ≈ 3η/0.26 ≈ 2·10⁻³` at `η = 2·10⁻⁴`) to get positivity on
+the balls by Taylor; (ii) outside the balls, an interval branch-and-bound over
+`{(p,q,r) ∈ [24/25, 2]³ : Gram ≥ 0}` — this needs verified interval arithmetic, which is the
+one piece of infrastructure Mathlib lacks; an intermediate target is a rigorous *external*
+verification whose subdivision tree is then replayed in Lean.  Do not attempt a global SOS
+certificate: the degree (`≈ 35` in `p,q,r`) makes it impractical. -/
+theorem certData_tri_poly : ∀ p q r : ℝ, 24 / 25 ≤ p → 24 / 25 ≤ q → 24 / 25 ≤ r →
+    p ≤ 2 → q ≤ 2 → r ≤ 2 →
+    0 ≤ 1 + 2 * (1 - p ^ 2 / 2) * (1 - q ^ 2 / 2) * (1 - r ^ 2 / 2)
+        - (1 - p ^ 2 / 2) ^ 2 - (1 - q ^ 2 / 2) ^ 2 - (1 - r ^ 2 / 2) ^ 2 →
+    0 ≤ certData.lam * (q * r + p * r + p * q)
+        - p * q * r * Fsum certData.L certData.D (1 - p ^ 2 / 2) (1 - q ^ 2 / 2) (1 - r ^ 2 / 2) := sorry
+
+/-- **Task 6 — the side conditions** `0 ≤ a₁`, `0 ≤ λ ≤ 1/18`: rational bounds on the explicit
+data, as in Task 2. -/
+theorem certData_side : 0 ≤ certData.a1 ∧ 0 ≤ certData.lam ∧ certData.lam ≤ 1 / 18 := sorry
+
+-- END OF TASKS -----------------------------------------------------------------------------
+
+/-- The certificate exists: assembled from Tasks 1–6 and the conversion lemmas.  **Proved.** -/
+theorem exists_threePointCert : Nonempty ThreePointCert :=
+  ⟨{ a0 := certData.a0, a1 := certData.a1, lam := certData.lam, L := certData.L, D := certData.D
+     D_nonneg := certData_D_nonneg
+     a1_nonneg := certData_side.1
+     lam_nonneg := certData_side.2.1
+     lam_le := certData_side.2.2
+     pair := pair_of_poly certData.L certData.D certData.a0 certData.a1 certData.lam
+       certData_pair_poly
+     tri := tri_of_poly certData.L certData.D certData.lam certData_tri_poly
+     bound_ge := certData_bound }⟩
+
+/-- Any certificate proves the open inequality: a configuration at least as good as the antiprism
+has energy `≤ 19.6753`, hence (§15) all inner products `≤ 0.5373`, hence (§16) energy at least
+the certificate's bound, which is at least `E(u*)`. -/
+theorem thomson_eight_lower_of_cert (C : ThreePointCert) :
+    antiprismEnergy uStar ≤ thomsonInf 8 := by
+  apply lower_bound_of_near_optimal (by norm_num)
+  intro x hx hE
+  have hE' : energy x ≤ 19.6753 := hE.trans antiprismEnergy_uStar_lt.le
+  have hsep : ∀ i j, i ≠ j → ⟪x i, x j⟫ ≤ 5373 / 10000 := by
+    intro i j hij
+    have hs := separation_of_energy_le hx hE' hij
+    rw [inner_eq_of_norm _ _ (hx.1 i) (hx.1 j)]
+    nlinarith [hs, sq_nonneg (‖x i - x j‖ - 481 / 500)]
+  exact C.bound_ge.trans (three_point_bound C x hx hsep)
+
+
+end ThreePoint
+
+/-! ## 17. The main theorem -/
+
+/-- The matching lower bound: no admissible configuration beats the best antiprism.  Proved
+from `exists_threePointCert`, itself assembled from the six Tasks of §16, which are the only
+`sorry`s in this file. -/
+theorem thomson_eight_lower : antiprismEnergy uStar ≤ thomsonInf 8 :=
+  thomson_eight_lower_of_cert (Classical.choice exists_threePointCert)
+
+/-- The square antiprism solves the 8-point Thomson problem (conditional on `thomson_eight_lower`). -/
+theorem thomson_eight : thomsonInf 8 = antiprismEnergy uStar :=
+  le_antisymm thomsonInf_le_uStar thomson_eight_lower
+
+/-- What is actually proved about the value, sorry-free:
+`19.6475 < thomsonInf 8 ≤ E(u*) < 19.6753`. -/
+theorem thomsonInf_mem_Ioc : thomsonInf 8 ∈ Set.Ioc (19.6475 : ℝ) (antiprismEnergy uStar) :=
+  ⟨thomsonInf_gt'', thomsonInf_le_uStar⟩
+
+/-- The open inequality can fail by at most `0.0278`.  For comparison, the linear-programming
+method cannot in principle do better than `19.6478`, a gap of `0.0275`: what is left is not a
+matter of finding a better polynomial. -/
+theorem thomson_eight_gap : antiprismEnergy uStar - thomsonInf 8 < 278 / 10000 := by
+  have h1 := thomsonInf_gt''
+  have h2 := antiprismEnergy_uStar_lt
+  norm_num at h1 h2 ⊢
+  linarith
+
+end Thomson

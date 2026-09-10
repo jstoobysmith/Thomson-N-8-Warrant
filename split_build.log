@@ -1,0 +1,8 @@
+warning: Thomson/ThreePoint/Tasks.lean:82:18: declaration uses `sorry`
+warning: Thomson/ThreePoint/Tasks.lean:89:8: declaration uses `sorry`
+warning: Thomson/ThreePoint/Tasks.lean:98:8: declaration uses `sorry`
+warning: Thomson/ThreePoint/Tasks.lean:108:8: declaration uses `sorry`
+warning: Thomson/ThreePoint/Tasks.lean:127:8: declaration uses `sorry`
+warning: Thomson/ThreePoint/Tasks.lean:136:8: declaration uses `sorry`
+Build completed successfully (8719 jobs).
+BUILD_DONE

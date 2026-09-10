@@ -1,0 +1,26 @@
+added Hessian LMIs at 5 triangle types and P''>= 0.0002 at 4 distances
+added 21495 cutting-plane points from certificate_r5373.json on a 120/axis grid
+added 2002 targeted points around the known dips
+status=optimal_inaccurate  eps*=1.209e-03  (PSD margin fixed 0.0015, 32321 triangle pts incl. boundary, 562s)
+written certificate_r5373b.json
+=== verify 120/axis + local ===
+bound = 19.6752878633   E(u*) = 19.6752878612   diff = +2.08e-09
+kernel residuals |F_k v_k|/|v_k|: ['4.1e-17', '7.8e-16', '1.3e-16', '3.4e-18', '1.6e-18', '1.3e-19']
+min eig of F_k on v^perp: ['1.50e-03', '1.50e-03', '1.50e-03', '1.50e-03', '1.50e-03', '1.50e-03']
+pair polynomial on 20000 pts: min = -5.940e-08 at t=-0.3718
+triangle slack on 217395 pts (120/axis): min = +7.150e-09 at [-0.793  0.176  0.318]
+LOCAL fine check (spacing 0.004 within 0.08 of each touching type): min T = -1.033e-08 at (np.float64(0.1709), np.float64(0.1709), np.float64(0.3141))
+=== HP projection ===
+pair polynomial min on 1501 pts: 4.77435e-12
+triangle slack min on 3154 pts: 2.69936e-7
+written certificate_hp.json
+=== Hessians ===
+Hessian of the triangle slack at each antiprism triangle type (eigenvalues):
+   ('-0.37182126', '0.31408937', '0.31408937'): T=1.88e-21  eig = ['0.00019932', '0.00054442', '0.0209465']   PD
+   ('-0.79910143', '-0.37182126', '0.17092269'): T=3.75e-21  eig = ['0.000200186', '0.000515028', '0.00820216']   PD
+   ('-0.79910143', '-0.79910143', '0.31408937'): T=1.88e-21  eig = ['0.000592798', '0.00889747', '0.0117447']   PD
+   ('-0.79910143', '0.17092269', '0.31408937'): T=3.75e-21  eig = ['0.000198761', '0.000866474', '0.00689202']   PD
+   ('0.17092269', '0.17092269', '0.31408937'): T=1.88e-21  eig = ['0.000259354', '0.00205859', '0.0244777']   PD
+all five Hessians positive definite: True
+
+second derivative of the pair polynomial P(s) at the four distances (must be > 0):

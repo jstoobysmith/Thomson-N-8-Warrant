@@ -1,0 +1,30 @@
+[    0.4s] minimal polynomial ready; A(u) leading coeffs 1 B deg 11
+[    0.4s] minpoly at u*: 0.0  check u^12 reduce consistency: 2.79e-47  y^2: 0.0
+[    0.4s] field arithmetic ready; testing inverse of y: 0.0
+[    0.4s]   chord A: s^2 vs 2-2t: 0.0
+[    0.4s]   chord D: s^2 vs 2-2t: 0.0
+[    0.4s]   chord N: s^2 vs 2-2t: 2.67e-51
+[    0.4s]   chord F: s^2 vs 2-2t: 5.35e-51
+[    2.6s] S3 polynomials built
+[    3.0s] exact kernel vectors in K
+[    3.0s]   v_0 ⟂ basis check: 0.0
+[    3.0s]   v_1 ⟂ basis check: 0.0
+[    3.0s]   v_2 ⟂ basis check: 0.0
+[    3.0s]   v_3 ⟂ basis check: 0.0
+[    3.0s]   v_4 ⟂ basis check: 0.0
+[    3.0s]   v_5 ⟂ basis check: 0.0
+[    3.1s] numerical H in exact basis; sizes [(8, 8), (7, 7), (6, 6), (5, 5), (4, 4), (3, 3)]
+[    3.1s] unknowns: 119
+[    3.2s] row: bound
+[   11.4s] rows: pair A
+[   17.9s] rows: pair D
+[   26.9s] rows: pair N
+[   35.9s] rows: pair F
+[   50.4s] rows: triangle FFA
+[   64.7s] rows: triangle FDN
+[   77.6s] rows: triangle FNA
+[   86.4s] rows: triangle DAA
+[   99.5s] rows: triangle NNA
+[   99.5s] total rows: 29
+[  100.0s] max |residual| at numerical x0: 1.792e-7
+[  100.1s] rows saved (task1_rows.pkl). Next: rank-revealing pivot selection and exact solve (task1_solve.py).

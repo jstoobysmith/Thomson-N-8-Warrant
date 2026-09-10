@@ -1,0 +1,44 @@
+[    0.4s] minimal polynomial ready; A(u) leading coeffs 1 B deg 11
+[    0.4s] minpoly at u*: 0.0  check u^12 reduce consistency: 2.79e-47  y^2: 0.0
+[    0.4s] field arithmetic ready; testing inverse of y: 0.0
+[    0.5s] 29 rows, 119 unknowns loaded
+[    1.0s] numerical rank: 24 sv tail: [4.26e-02 5.50e-03 1.88e-15 4.40e-16]
+[    1.0s] pivot block cond: 4.562e+04
+[    1.0s] pivot unknowns: ['a0', 'lam', 'H0[0,2]', 'H0[0,7]', 'H0[1,3]', 'H0[2,4]', 'H0[5,7]', 'H1[0,0]', 'H1[0,1]', 'H1[0,2]', 'H1[2,3]', 'H2[0,0]', 'H2[0,1]', 'H2[1,1]', 'H2[1,2]', 'H2[3,5]', 'H3[0,0]', 'H3[0,1]', 'H3[0,3]', 'H4[0,0]', 'H4[0,1]', 'H4[0,2]', 'H5[0,0]', 'H5[0,1]']
+[    1.9s]   assembled row 1/24
+[   13.3s]   assembled row 2/24
+[   23.2s]   assembled row 3/24
+[   34.7s]   assembled row 4/24
+[   44.5s]   assembled row 5/24
+[   57.0s]   assembled row 6/24
+[   67.2s]   assembled row 7/24
+[   79.6s]   assembled row 8/24
+[   89.6s]   assembled row 9/24
+[  100.9s]   assembled row 10/24
+[  111.2s]   assembled row 11/24
+[  121.5s]   assembled row 12/24
+[  133.2s]   assembled row 13/24
+[  143.5s]   assembled row 14/24
+[  153.8s]   assembled row 15/24
+[  164.2s]   assembled row 16/24
+[  174.5s]   assembled row 17/24
+[  184.5s]   assembled row 18/24
+[  194.9s]   assembled row 19/24
+[  204.9s]   assembled row 20/24
+[  214.5s]   assembled row 21/24
+[  225.8s]   assembled row 22/24
+[  236.1s]   assembled row 23/24
+[  246.3s]   assembled row 24/24
+[  246.3s] solving the 4608 x 4608 rational system ...
+[  325.2s] solved
+[  330.4s] max residual of ALL rows at the exact solution: 2.907e-38
+[  330.5s] max |x_exact - x0| over pivots: 9.99e-6
+[  330.5s] height stat failed: ValueError('Exceeds the limit (4300 digits) for integer string conversion; use sys.set_int_max_str_digits() to increase the limit')
+Traceback (most recent call last):
+  File "/Users/js4814/Documents/GitHub/MyComandCenter/Thomson/threepoint/task1_solve.py", line 63, in <module>
+    pickle.dump(dict(cols=cols,free=free,xr={p:str(xr[p]) for p in free},X={p:{k:str(v) for k,v in X[p].d.items()} for p in cols},names=names,idx=idx),open(os.path.join(here,'task1_exact_solution.pkl'),'wb'))
+                                                                                 ~~~^^^
+  File "/Users/js4814/Documents/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/fractions.py", line 459, in __str__
+    return '%s/%s' % (self._numerator, self._denominator)
+                      ^^^^^^^^^^^^^^^
+ValueError: Exceeds the limit (4300 digits) for integer string conversion; use sys.set_int_max_str_digits() to increase the limit

@@ -1,0 +1,37 @@
+[    0.4s] minimal polynomial ready; A(u) leading coeffs 1 B deg 11
+[    0.4s] minpoly at u*: 0.0  check u^12 reduce consistency: 2.79e-47  y^2: 0.0
+[    0.4s] field arithmetic ready; testing inverse of y: 0.0
+[    0.5s] 29 rows, 119 unknowns loaded
+[    1.0s] numerical rank: 24 sv tail: [4.26e-02 5.50e-03 1.88e-15 4.40e-16]
+[    1.0s] pivot block cond: 4.562e+04
+[    1.0s] pivot unknowns: ['a0', 'lam', 'H0[0,2]', 'H0[0,7]', 'H0[1,3]', 'H0[2,4]', 'H0[5,7]', 'H1[0,0]', 'H1[0,1]', 'H1[0,2]', 'H1[2,3]', 'H2[0,0]', 'H2[0,1]', 'H2[1,1]', 'H2[1,2]', 'H2[3,5]', 'H3[0,0]', 'H3[0,1]', 'H3[0,3]', 'H4[0,0]', 'H4[0,1]', 'H4[0,2]', 'H5[0,0]', 'H5[0,1]']
+[    1.9s]   assembled row 1/24
+[   13.4s]   assembled row 2/24
+[   23.2s]   assembled row 3/24
+[   34.6s]   assembled row 4/24
+[   44.5s]   assembled row 5/24
+[   57.1s]   assembled row 6/24
+[   67.3s]   assembled row 7/24
+[   79.7s]   assembled row 8/24
+[   89.8s]   assembled row 9/24
+[  101.3s]   assembled row 10/24
+[  111.8s]   assembled row 11/24
+[  123.3s]   assembled row 12/24
+[  136.2s]   assembled row 13/24
+[  146.7s]   assembled row 14/24
+[  157.2s]   assembled row 15/24
+[  167.7s]   assembled row 16/24
+[  178.2s]   assembled row 17/24
+[  188.4s]   assembled row 18/24
+[  199.0s]   assembled row 19/24
+[  209.2s]   assembled row 20/24
+[  219.2s]   assembled row 21/24
+[  231.1s]   assembled row 22/24
+[  241.5s]   assembled row 23/24
+[  251.6s]   assembled row 24/24
+[  251.6s] solving the 4608 x 4608 rational system ...
+[  329.1s] solved
+[  334.3s] max residual of ALL rows at the exact solution: 2.907e-38
+[  334.4s] max |x_exact - x0| over pivots: 9.99e-6
+[  339.7s] coefficient heights among pivots (digits): max 15846 median 15725 count 4608
+[  345.0s] saved task1_exact_solution.pkl

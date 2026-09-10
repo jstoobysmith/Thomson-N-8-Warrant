@@ -1,0 +1,11 @@
+status=optimal_inaccurate   mu* = 0.0023531241213905897   (95s)
+a0=0.95165939 a1=0.27789078 lambda=0.01031622
+  H_0: min eig +2.353e-03  max 1.429e+00
+  H_1: min eig +2.353e-03  max 1.417e+01
+  H_2: min eig +2.353e-03  max 5.609e+00
+  H_3: min eig +2.353e-03  max 7.932e-01
+  H_4: min eig +2.353e-03  max 3.680e-01
+  H_5: min eig +2.353e-03  max 1.943e-02
+written certificate_tight.json
+
+VERDICT: GO — a certificate exactly tight at the antiprism exists with positive PSD margin

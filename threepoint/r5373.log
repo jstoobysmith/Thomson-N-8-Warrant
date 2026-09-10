@@ -1,0 +1,4 @@
+added Hessian LMIs at 5 triangle types and P''>= 0.0002 at 4 distances
+added 22129 cutting-plane points from certificate_pd.json on a 120/axis grid
+s grid
+added 21644 dense local points near the touching types
