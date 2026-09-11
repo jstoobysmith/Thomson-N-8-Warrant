@@ -6,9 +6,9 @@ import Thomson.TriLocalCert.Type0
 namespace Thomson.TriLocalCert
 
 set_option maxHeartbeats 4000000 in
-def bits0_1n : List Bool := [true, false, true, false, false, false, false, true, false, false, false, false, true, false, false, false, false]
+def tree0_1n : QT := (.node .leaf (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf))
 
 set_option maxRecDepth 1000000 in
-theorem face0_1n : faceOK D0 1 false 4 bits0_1n = true := by decide +kernel
+theorem face0_1n : faceOK D0 1 false tree0_1n = true := by decide +kernel
 
 end Thomson.TriLocalCert

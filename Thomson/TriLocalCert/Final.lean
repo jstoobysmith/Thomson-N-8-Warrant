@@ -17,8 +17,8 @@ theorem type_certificate {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum 
     (m : Fin 5) {CSm : IT} {a b c : ℤ} {D : Data}
     (hCS : ∀ i j k, CSm i j k = Ishift CFt a b c i j k)
     (hD : D = computeD CFt CSm (Tt m).1 (Tt m).2.1 (Tt m).2.2 a b c)
-    (hM : 0 ≤ D.M.lo) (depth : Fin 3 → Bool → ℕ) (bits : Fin 3 → Bool → List Bool)
-    (hok : ∀ f σ, faceOK D f σ (depth f σ) (bits f σ) = true) :
+    (hM : 0 ≤ D.M.lo) (trees : Fin 3 → Bool → QT)
+    (hok : ∀ f σ, faceOK D f σ (trees f σ) = true) :
     (∀ δ : Fin 3 → ℝ, (∀ i, |δ i| ≤ 1 / 500) →
       0 ≤ bracket (Hpol (Q2 p (touchType m))) (Cpol (K3 p (touchType m)))
         (Mreal CSm (Tt m).1 (Tt m).2.1 (Tt m).2.2 a b c) δ) ∧
@@ -32,7 +32,7 @@ theorem type_certificate {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum 
   obtain ⟨h0, h1, h2⟩ := Tt_mem m
   have hmem := computeD_mem (CS := CSm) (a := a) (b := b) (c := c) hc h0 h1 h2
   rw [← hD] at hmem
-  exact ⟨bracket_nonneg hmem hM depth bits hok,
+  exact ⟨bracket_nonneg hmem hM trees hok,
     fun δ hδ x hx => ray4_le_M hcs h0 h1 h2 hδ hx.1 hx.2⟩
 
 end Thomson.TriLocalCert

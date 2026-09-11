@@ -216,24 +216,21 @@ def faceVec (f : Fin 3) (s x y : ℤ) : Fin 3 → ℤ := fun a =>
 noncomputable def faceVecR (f : Fin 3) (s x y : ℝ) : Fin 3 → ℝ := fun a =>
   if a = f then s else if a = fst f then x else y
 
+/-- A quadtree of patches. -/
+inductive QT
+  | leaf
+  | node (a b c d : QT)
+
 /-- **The quadtree check** of the face `f` with face coordinate `s`, on the square
-`[x₀ ± h] × [y₀ ± h]`; the tree is a list of bits in preorder (`true`: split into four).
-Returns the unread bits. -/
-def qtOK (D : Data) (f : Fin 3) (s : ℤ) : ℕ → List Bool → ℤ → ℤ → ℤ → Option (List Bool)
-  | 0, _, _, _, _ => none
-  | _ + 1, [], _, _, _ => none
-  | _ + 1, false :: rest, x0, y0, h =>
-      if boxOK D (faceVec f s x0 y0) (faceVec f 0 h h) then some rest else none
-  | n + 1, true :: rest, x0, y0, h =>
-      if 2 * (h / 2) = h then
-        match qtOK D f s n rest (x0 - h / 2) (y0 - h / 2) (h / 2) with
-        | none => none
-        | some r1 => match qtOK D f s n r1 (x0 - h / 2) (y0 + h / 2) (h / 2) with
-          | none => none
-          | some r2 => match qtOK D f s n r2 (x0 + h / 2) (y0 - h / 2) (h / 2) with
-            | none => none
-            | some r3 => qtOK D f s n r3 (x0 + h / 2) (y0 + h / 2) (h / 2)
-      else none
+`[x₀ ± h] × [y₀ ± h]`: a leaf is one patch, a node splits the square into four. -/
+def qtOK (D : Data) (f : Fin 3) (s : ℤ) : QT → ℤ → ℤ → ℤ → Bool
+  | .leaf, x0, y0, h => boxOK D (faceVec f s x0 y0) (faceVec f 0 h h)
+  | .node q1 q2 q3 q4, x0, y0, h =>
+      decide (2 * (h / 2) = h) &&
+      qtOK D f s q1 (x0 - h / 2) (y0 - h / 2) (h / 2) &&
+      qtOK D f s q2 (x0 - h / 2) (y0 + h / 2) (h / 2) &&
+      qtOK D f s q3 (x0 + h / 2) (y0 - h / 2) (h / 2) &&
+      qtOK D f s q4 (x0 + h / 2) (y0 + h / 2) (h / 2)
 
 theorem faceVecR_mem {f : Fin 3} {s x y : ℤ} {h : ℤ} {X Y : ℝ}
     (hx : |X * SCALE - x| ≤ h) (hy : |Y * SCALE - y| ≤ h) :
@@ -248,90 +245,42 @@ theorem faceVecR_mem {f : Fin 3} {s x y : ℤ} {h : ℤ} {X Y : ℝ}
 
 /-- **Soundness of the quadtree**: every point of the square satisfies `g ≥ 0`. -/
 theorem qtOK_sound {D : Data} {H C M} (hD : D.Mem H C M) {f : Fin 3} {s : ℤ} :
-    ∀ (n : ℕ) (bits : List Bool) (x0 y0 h : ℤ) (rest : List Bool),
-      qtOK D f s n bits x0 y0 h = some rest →
+    ∀ (t : QT) (x0 y0 h : ℤ), qtOK D f s t x0 y0 h = true →
       ∀ X Y : ℝ, |X * SCALE - x0| ≤ h → |Y * SCALE - y0| ≤ h →
         0 ≤ Qf H (faceVecR f ((s : ℝ) / SCALE) X Y) / 2
           - |Kf C (faceVecR f ((s : ℝ) / SCALE) X Y)| / 6
           - M * N2 (faceVecR f ((s : ℝ) / SCALE) X Y) ^ 2 / 24 := by
-  intro n
-  induction n with
-  | zero => intro bits x0 y0 h rest hq; simp [qtOK] at hq
-  | succ n ih =>
-    intro bits x0 y0 h rest hq X Y hx hy
-    match bits, hq with
-    | [], hq => simp [qtOK] at hq
-    | false :: r, hq =>
-      simp only [qtOK] at hq
-      split_ifs at hq with hb
-      exact boxOK_sound hD hb (faceVecR_mem hx hy)
-    | true :: r, hq =>
-      simp only [qtOK] at hq
-      split_ifs at hq with hev
-      set k := h / 2 with hk
-      have hh : (h : ℝ) = 2 * k := by exact_mod_cast hev.symm
-      have hx' := abs_le.mp hx; have hy' := abs_le.mp hy
-      -- the child containing `(X, Y)`
-      have child : ∀ (cx cy : ℤ), |X * SCALE - cx| ≤ k → |Y * SCALE - cy| ≤ k →
-          (∃ r', qtOK D f s n r x0 y0 h = some r') ∨ True := fun _ _ _ _ => Or.inr trivial
-      clear child
-      rcases le_total (X * SCALE) x0 with hxl | hxl <;> rcases le_total (Y * SCALE) y0 with hyl | hyl
-      · -- lower-left
-        cases h1 : qtOK D f s n r (x0 - k) (y0 - k) k with
-        | none => simp [h1] at hq
-        | some r1 =>
-          refine ih r (x0 - k) (y0 - k) k r1 h1 X Y ?_ ?_
-          · rw [abs_le]; push_cast; constructor <;> linarith
-          · rw [abs_le]; push_cast; constructor <;> linarith
-      · -- lower-left in x, upper in y
-        cases h1 : qtOK D f s n r (x0 - k) (y0 - k) k with
-        | none => simp [h1] at hq
-        | some r1 =>
-          simp only [h1] at hq
-          cases h2 : qtOK D f s n r1 (x0 - k) (y0 + k) k with
-          | none => simp [h2] at hq
-          | some r2 =>
-            refine ih r1 (x0 - k) (y0 + k) k r2 h2 X Y ?_ ?_
-            · rw [abs_le]; push_cast; constructor <;> linarith
-            · rw [abs_le]; push_cast; constructor <;> linarith
-      · cases h1 : qtOK D f s n r (x0 - k) (y0 - k) k with
-        | none => simp [h1] at hq
-        | some r1 =>
-          simp only [h1] at hq
-          cases h2 : qtOK D f s n r1 (x0 - k) (y0 + k) k with
-          | none => simp [h2] at hq
-          | some r2 =>
-            simp only [h2] at hq
-            cases h3 : qtOK D f s n r2 (x0 + k) (y0 - k) k with
-            | none => simp [h3] at hq
-            | some r3 =>
-              refine ih r2 (x0 + k) (y0 - k) k r3 h3 X Y ?_ ?_
-              · rw [abs_le]; push_cast; constructor <;> linarith
-              · rw [abs_le]; push_cast; constructor <;> linarith
-      · cases h1 : qtOK D f s n r (x0 - k) (y0 - k) k with
-        | none => simp [h1] at hq
-        | some r1 =>
-          simp only [h1] at hq
-          cases h2 : qtOK D f s n r1 (x0 - k) (y0 + k) k with
-          | none => simp [h2] at hq
-          | some r2 =>
-            simp only [h2] at hq
-            cases h3 : qtOK D f s n r2 (x0 + k) (y0 - k) k with
-            | none => simp [h3] at hq
-            | some r3 =>
-              simp only [h3] at hq
-              refine ih r3 (x0 + k) (y0 + k) k rest hq X Y ?_ ?_
-              · rw [abs_le]; push_cast; constructor <;> linarith
-              · rw [abs_le]; push_cast; constructor <;> linarith
+  intro t
+  induction t with
+  | leaf =>
+    intro x0 y0 h hq X Y hx hy
+    exact boxOK_sound hD hq (faceVecR_mem hx hy)
+  | node q1 q2 q3 q4 ih1 ih2 ih3 ih4 =>
+    intro x0 y0 h hq X Y hx hy
+    simp only [qtOK, Bool.and_eq_true, decide_eq_true_eq] at hq
+    obtain ⟨⟨⟨⟨hev, h1⟩, h2⟩, h3⟩, h4⟩ := hq
+    set k := h / 2 with hk
+    have hh : (h : ℝ) = 2 * k := by exact_mod_cast hev.symm
+    have hx' := abs_le.mp hx; have hy' := abs_le.mp hy
+    rcases le_total (X * SCALE) x0 with hxl | hxl <;>
+      rcases le_total (Y * SCALE) y0 with hyl | hyl
+    · refine ih1 (x0 - k) (y0 - k) k h1 X Y ?_ ?_ <;>
+        · rw [abs_le]; push_cast; constructor <;> linarith
+    · refine ih2 (x0 - k) (y0 + k) k h2 X Y ?_ ?_ <;>
+        · rw [abs_le]; push_cast; constructor <;> linarith
+    · refine ih3 (x0 + k) (y0 - k) k h3 X Y ?_ ?_ <;>
+        · rw [abs_le]; push_cast; constructor <;> linarith
+    · refine ih4 (x0 + k) (y0 + k) k h4 X Y ?_ ?_ <;>
+        · rw [abs_le]; push_cast; constructor <;> linarith
 
 /-! ## The cube -/
 
 /-- The check of one face (sign `σ`: `true` for `e_f = +ρ`). -/
-def faceOK (D : Data) (f : Fin 3) (σ : Bool) (depth : ℕ) (bits : List Bool) : Bool :=
-  (qtOK D f (if σ then RHO else -RHO) depth bits 0 0 RHO).isSome
+def faceOK (D : Data) (f : Fin 3) (σ : Bool) (t : QT) : Bool :=
+  qtOK D f (if σ then RHO else -RHO) t 0 0 RHO
 
-theorem faceOK_sound {D : Data} {H C M} (hD : D.Mem H C M) {f : Fin 3} {σ : Bool} {depth : ℕ}
-    {bits : List Bool} (hok : faceOK D f σ depth bits = true) :
+theorem faceOK_sound {D : Data} {H C M} (hD : D.Mem H C M) {f : Fin 3} {σ : Bool} {t : QT}
+    (hok : faceOK D f σ t = true) :
     ∀ X Y : ℝ, |X| ≤ 1 / 500 → |Y| ≤ 1 / 500 →
       0 ≤ Qf H (faceVecR f (if σ then 1 / 500 else -(1 / 500)) X Y) / 2
         - |Kf C (faceVecR f (if σ then 1 / 500 else -(1 / 500)) X Y)| / 6
@@ -339,10 +288,9 @@ theorem faceOK_sound {D : Data} {H C M} (hD : D.Mem H C M) {f : Fin 3} {σ : Boo
   have hS : (0 : ℝ) < SCALE := SCALE_pos'
   intro X Y hX hY
   unfold faceOK at hok
-  obtain ⟨rest, hq⟩ := Option.isSome_iff_exists.mp hok
   have hs : ((if σ then RHO else -RHO : ℤ) : ℝ) / SCALE = if σ then 1 / 500 else -(1 / 500) := by
     split_ifs <;> simp only [RHO, SCALE] <;> norm_num
-  have := qtOK_sound hD depth bits 0 0 RHO rest hq X Y ?_ ?_
+  have := qtOK_sound hD t 0 0 RHO hok X Y ?_ ?_
   · rwa [hs] at this
   · have : |X * SCALE| ≤ (RHO : ℝ) := by
       rw [abs_mul, abs_of_pos hS]; simp only [RHO, SCALE] at hX ⊢; push_cast; nlinarith
@@ -403,8 +351,7 @@ theorem bracket_nonneg_of_faces {H : Fin 3 → Fin 3 → ℝ} {C : Fin 3 → Fin
 /-- **Part (2) of Task 5a's numeric side**: a checked covering gives `bracket ≥ 0` on the cube
 for every `(H, C, M)` in the data. -/
 theorem bracket_nonneg {D : Data} {H C M} (hD : D.Mem H C M) (hM : 0 ≤ D.M.lo)
-    (depth : Fin 3 → Bool → ℕ) (bits : Fin 3 → Bool → List Bool)
-    (hok : ∀ f σ, faceOK D f σ (depth f σ) (bits f σ) = true) :
+    (trees : Fin 3 → Bool → QT) (hok : ∀ f σ, faceOK D f σ (trees f σ) = true) :
     ∀ δ : Fin 3 → ℝ, (∀ i, |δ i| ≤ 1 / 500) → 0 ≤ bracket H C M δ := by
   have hS : (0 : ℝ) < SCALE := SCALE_pos'
   have hM0 : 0 ≤ M := by

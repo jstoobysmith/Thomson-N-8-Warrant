@@ -195,17 +195,19 @@ def fst(f): return 1 if f == 0 else 0
 def faceVec(f, s, x, y):
     return [s if a == f else (x if a == fst(f) else y) for a in range(3)]
 
-def qt(D, f, s, x0, y0, h, bits, depth):
+def qt(D, f, s, x0, y0, h, depth=0):
+    """the quadtree: None for a leaf, a 4-tuple of subtrees for a node"""
     if boxG(D, faceVec(f, s, x0, y0), faceVec(f, 0, h, h))[0] >= 0:
-        bits.append(False)
-        return depth + 1
+        return None
     assert h % 2 == 0 and depth < 40
-    bits.append(True)
     k = h // 2
-    dmax = 0
-    for (dx, dy) in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
-        dmax = max(dmax, qt(D, f, s, x0 + dx * k, y0 + dy * k, k, bits, depth + 1))
-    return dmax
+    return tuple(qt(D, f, s, x0 + dx * k, y0 + dy * k, k, depth + 1)
+                 for (dx, dy) in [(-1, -1), (-1, 1), (1, -1), (1, 1)])
+
+def leaves(t): return 1 if t is None else sum(leaves(c) for c in t)
+
+def qterm(t):
+    return ".leaf" if t is None else "(.node " + " ".join(qterm(c) for c in t) + ")"
 
 
 # ---------- emitting Lean ----------
@@ -262,10 +264,10 @@ FACE = HDR + """import Thomson.TriLocalCert.Type{m}
 namespace Thomson.TriLocalCert
 
 set_option maxHeartbeats 4000000 in
-def bits{m}_{f}{s} : List Bool := [{bits}]
+def tree{m}_{f}{s} : QT := {tree}
 
 set_option maxRecDepth 1000000 in
-theorem face{m}_{f}{s} : faceOK D{m} {f} {bool} {depth} bits{m}_{f}{s} = true := by decide +kernel
+theorem face{m}_{f}{s} : faceOK D{m} {f} {bool} tree{m}_{f}{s} = true := by decide +kernel
 
 end Thomson.TriLocalCert
 """
@@ -363,32 +365,23 @@ def emit(outdir):
         H, C, M = computeD(CSm, T0, T1, T2, a, b, c)
         open(os.path.join(outdir, "Type%d.lean" % m), "w").write(TYPE.format(
             m=m, a=a, b=b, c=c, M=M[1] / S, CS=l3(CSm), H=l2(H), C=l3(C), MI=itv(M)))
-        depths = {}
         for f in range(3):
             for sg in (True, False):
-                bits = []
-                depth = qt((H, C, M), f, RHO if sg else -RHO, 0, 0, RHO, bits, 0)
-                depths[(f, sg)] = depth + 1
-                imports.append("import Thomson.TriLocalCert.Face%d_%d%s" % (m, f, "p" if sg else "n"))
-                n = bits.count(False)
+                t = qt((H, C, M), f, RHO if sg else -RHO, 0, 0, RHO)
+                n = leaves(t)
                 tot += n
+                imports.append("import Thomson.TriLocalCert.Face%d_%d%s" % (m, f, "p" if sg else "n"))
                 open(os.path.join(outdir, "Face%d_%d%s.lean" % (m, f, "p" if sg else "n")), "w").write(
                     FACE.format(m=m, f=f, s="p" if sg else "n", sgn="+" if sg else "−", n=n,
-                                bits=", ".join("true" if x else "false" for x in bits),
-                                bool="true" if sg else "false", depth=depth + 1))
-        dm = "\n".join("  | %d, %s => %d" % (f, "true" if sg else "false", depths[(f, sg)])
-                       for f in range(3) for sg in (True, False))
-        bm = "\n".join("  | %d, %s => bits%d_%d%s" % (f, "true" if sg else "false", m, f, "p" if sg else "n")
+                                tree=qterm(t), bool="true" if sg else "false"))
+        tm = "\n".join("  | %d, %s => tree%d_%d%s" % (f, "true" if sg else "false", m, f, "p" if sg else "n")
                        for f in range(3) for sg in (True, False))
         faces = " | ".join("exact face%d_%d%s" % (m, f, s2) for f in range(3) for s2 in ("p", "n"))
-        glue_types.append(f"""def depth{m} : Fin 3 → Bool → ℕ
-{dm}
-
-def bitsOf{m} : Fin 3 → Bool → List Bool
-{bm}
+        glue_types.append(f"""def trees{m} : Fin 3 → Bool → QT
+{tm}
 
 theorem typeCert{m} {{p : Fin 24 → ℝ}} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
-  type_certificate hclose {m} CS{m}_eq D{m}_eq (by decide) depth{m} bitsOf{m}
+  type_certificate hclose {m} CS{m}_eq D{m}_eq (by decide) trees{m}
     (fun f σ => by fin_cases f <;> cases σ <;> first | {faces})
 """)
         glue_m.append("  | %d => Mreal CS%d (Tt %d).1 (Tt %d).2.1 (Tt %d).2.2 sa%d sb%d sc%d" % (m, m, m, m, m, m, m, m))

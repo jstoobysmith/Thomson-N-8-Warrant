@@ -6,9 +6,9 @@ import Thomson.TriLocalCert.Type2
 namespace Thomson.TriLocalCert
 
 set_option maxHeartbeats 4000000 in
-def bits2_2p : List Bool := [true, false, true, false, false, false, true, false, false, false, false, true, false, false, true, false, false, false, false, true, false, false, false, false, true, true, false, false, false, false, true, false, true, false, false, false, false, true, false, false, false, false, true, false, false, false, true, false, false, false, false, true, false, true, false, false, false, false, true, false, false, false, false, true, false, false, false, false, true, true, false, false, false, true, false, false, false, false, true, true, false, false, false, false, true, false, false, false, false, true, false, false, false, false, true, false, false, false, false, true, false, true, false, false, false, false, false, true, false, false, false, false, true, true, false, false, false, false, true, false, false, false, false, true, false, false, false, false, true, false, false, false, false]
+def tree2_2p : QT := (.node .leaf (.node .leaf .leaf .leaf (.node .leaf .leaf .leaf .leaf)) (.node .leaf .leaf (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf)) (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf (.node .leaf .leaf .leaf .leaf))) (.node .leaf (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf)) (.node (.node .leaf .leaf .leaf (.node .leaf .leaf .leaf .leaf)) (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf)) (.node .leaf (.node .leaf .leaf .leaf .leaf) .leaf (.node .leaf .leaf .leaf .leaf)) (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf)))))
 
 set_option maxRecDepth 1000000 in
-theorem face2_2p : faceOK D2 2 true 7 bits2_2p = true := by decide +kernel
+theorem face2_2p : faceOK D2 2 true tree2_2p = true := by decide +kernel
 
 end Thomson.TriLocalCert

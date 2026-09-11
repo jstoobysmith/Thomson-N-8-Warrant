@@ -44,104 +44,64 @@ namespace Thomson.TriLocalCert
 
 open Thomson Thomson.Tri5b Set
 
-def depth0 : Fin 3 → Bool → ℕ
-  | 0, true => 4
-  | 0, false => 4
-  | 1, true => 4
-  | 1, false => 4
-  | 2, true => 9
-  | 2, false => 9
-
-def bitsOf0 : Fin 3 → Bool → List Bool
-  | 0, true => bits0_0p
-  | 0, false => bits0_0n
-  | 1, true => bits0_1p
-  | 1, false => bits0_1n
-  | 2, true => bits0_2p
-  | 2, false => bits0_2n
+def trees0 : Fin 3 → Bool → QT
+  | 0, true => tree0_0p
+  | 0, false => tree0_0n
+  | 1, true => tree0_1p
+  | 1, false => tree0_1n
+  | 2, true => tree0_2p
+  | 2, false => tree0_2n
 
 theorem typeCert0 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
-  type_certificate hclose 0 CS0_eq D0_eq (by decide) depth0 bitsOf0
+  type_certificate hclose 0 CS0_eq D0_eq (by decide) trees0
     (fun f σ => by fin_cases f <;> cases σ <;> first | exact face0_0p | exact face0_0n | exact face0_1p | exact face0_1n | exact face0_2p | exact face0_2n)
 
-def depth1 : Fin 3 → Bool → ℕ
-  | 0, true => 2
-  | 0, false => 2
-  | 1, true => 8
-  | 1, false => 8
-  | 2, true => 8
-  | 2, false => 8
-
-def bitsOf1 : Fin 3 → Bool → List Bool
-  | 0, true => bits1_0p
-  | 0, false => bits1_0n
-  | 1, true => bits1_1p
-  | 1, false => bits1_1n
-  | 2, true => bits1_2p
-  | 2, false => bits1_2n
+def trees1 : Fin 3 → Bool → QT
+  | 0, true => tree1_0p
+  | 0, false => tree1_0n
+  | 1, true => tree1_1p
+  | 1, false => tree1_1n
+  | 2, true => tree1_2p
+  | 2, false => tree1_2n
 
 theorem typeCert1 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
-  type_certificate hclose 1 CS1_eq D1_eq (by decide) depth1 bitsOf1
+  type_certificate hclose 1 CS1_eq D1_eq (by decide) trees1
     (fun f σ => by fin_cases f <;> cases σ <;> first | exact face1_0p | exact face1_0n | exact face1_1p | exact face1_1n | exact face1_2p | exact face1_2n)
 
-def depth2 : Fin 3 → Bool → ℕ
-  | 0, true => 7
-  | 0, false => 7
-  | 1, true => 9
-  | 1, false => 9
-  | 2, true => 7
-  | 2, false => 7
-
-def bitsOf2 : Fin 3 → Bool → List Bool
-  | 0, true => bits2_0p
-  | 0, false => bits2_0n
-  | 1, true => bits2_1p
-  | 1, false => bits2_1n
-  | 2, true => bits2_2p
-  | 2, false => bits2_2n
+def trees2 : Fin 3 → Bool → QT
+  | 0, true => tree2_0p
+  | 0, false => tree2_0n
+  | 1, true => tree2_1p
+  | 1, false => tree2_1n
+  | 2, true => tree2_2p
+  | 2, false => tree2_2n
 
 theorem typeCert2 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
-  type_certificate hclose 2 CS2_eq D2_eq (by decide) depth2 bitsOf2
+  type_certificate hclose 2 CS2_eq D2_eq (by decide) trees2
     (fun f σ => by fin_cases f <;> cases σ <;> first | exact face2_0p | exact face2_0n | exact face2_1p | exact face2_1n | exact face2_2p | exact face2_2n)
 
-def depth3 : Fin 3 → Bool → ℕ
-  | 0, true => 9
-  | 0, false => 9
-  | 1, true => 10
-  | 1, false => 10
-  | 2, true => 10
-  | 2, false => 10
-
-def bitsOf3 : Fin 3 → Bool → List Bool
-  | 0, true => bits3_0p
-  | 0, false => bits3_0n
-  | 1, true => bits3_1p
-  | 1, false => bits3_1n
-  | 2, true => bits3_2p
-  | 2, false => bits3_2n
+def trees3 : Fin 3 → Bool → QT
+  | 0, true => tree3_0p
+  | 0, false => tree3_0n
+  | 1, true => tree3_1p
+  | 1, false => tree3_1n
+  | 2, true => tree3_2p
+  | 2, false => tree3_2n
 
 theorem typeCert3 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
-  type_certificate hclose 3 CS3_eq D3_eq (by decide) depth3 bitsOf3
+  type_certificate hclose 3 CS3_eq D3_eq (by decide) trees3
     (fun f σ => by fin_cases f <;> cases σ <;> first | exact face3_0p | exact face3_0n | exact face3_1p | exact face3_1n | exact face3_2p | exact face3_2n)
 
-def depth4 : Fin 3 → Bool → ℕ
-  | 0, true => 9
-  | 0, false => 9
-  | 1, true => 9
-  | 1, false => 9
-  | 2, true => 6
-  | 2, false => 6
-
-def bitsOf4 : Fin 3 → Bool → List Bool
-  | 0, true => bits4_0p
-  | 0, false => bits4_0n
-  | 1, true => bits4_1p
-  | 1, false => bits4_1n
-  | 2, true => bits4_2p
-  | 2, false => bits4_2n
+def trees4 : Fin 3 → Bool → QT
+  | 0, true => tree4_0p
+  | 0, false => tree4_0n
+  | 1, true => tree4_1p
+  | 1, false => tree4_1n
+  | 2, true => tree4_2p
+  | 2, false => tree4_2n
 
 theorem typeCert4 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
-  type_certificate hclose 4 CS4_eq D4_eq (by decide) depth4 bitsOf4
+  type_certificate hclose 4 CS4_eq D4_eq (by decide) trees4
     (fun f σ => by fin_cases f <;> cases σ <;> first | exact face4_0p | exact face4_0n | exact face4_1p | exact face4_1n | exact face4_2p | exact face4_2n)
 
 
