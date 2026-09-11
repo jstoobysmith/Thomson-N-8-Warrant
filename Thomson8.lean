@@ -19,15 +19,21 @@ This is the umbrella module of a standalone Lake project (`lakefile.toml` in thi
   Thomson/ThreePoint/CertData.lean     GENERATED data tables (kernel bases, fixed rationals, pivot slots, `pivotsNum`)
   Thomson/ThreePoint/Linear.lean       THE CERTIFICATE, defined implicitly: `pivots := pivotMatrix⁻¹ *ᵥ pivotRhs`;
                                        the 24 tightness rows are affine in the pivots and vanish by definition — PROVED
-  Thomson/ThreePoint/Tasks.lean        THE EIGHT OPEN TASKS (the only `sorry`s), with proof sketches
-  Thomson/Main.lean                    `thomson_eight_lower`, proved from the Tasks
+  Thomson/ThreePoint/Slack.lean        the slack identity along the antiprism family (Task 1c)
+  Thomson/ThreePoint/Kernel*.lean      GENERATED: the kernel lemma, 310 polynomial identities (Task 1c)
+  Thomson/ThreePoint/Redundant.lean    Task 1c: the two dropped tightness rows — PROVED
+  Thomson/Pair/, Thomson/PSD/          Tasks 4 and 2 (`decide +kernel`) — PROVED
+  Thomson/ThreePoint/Tasks.lean        THE TASKS: status table; the only `sorry` is Task 5a
+  Thomson/Main.lean                    `thomson_eight_lower_of_tasks`, proved from the Tasks
+  Thomson/Complete.lean                `thomson_eight_lower` outright (library `Complete`; builds the
+                                       `native_decide` libraries `Task1b` and `Tri5b`)
 
-Status: `thomson_eight_lower : antiprismEnergy uStar ≤ thomsonInf 8` is proved from
-`exists_threePointCert`, which is assembled from the Tasks: `det ≠ 0` of the pivot system (1a), an
-enclosure of the pivots (1b), two redundant tightness rows (1c), positive semidefiniteness of the
-blocks (2), the pair inequality (4) and the triangle inequality (5a, 5b).  Tasks 0, 3, 6 are proved.
-Everything else, including Bachoc–Vallentin positivity, the three-point bound, and the exact
-tightness of the certificate at the antiprism (modulo 1a), is proved without `sorry`.  The previous
+Status: `thomson_eight_lower : antiprismEnergy uStar ≤ thomsonInf 8` (`Thomson/Complete.lean`) is
+proved from `exists_threePointCert_of_tasks`, which is assembled from the Tasks of
+`Thomson/ThreePoint/Tasks.lean`.  All of them are proved except Task 5a (local positivity of the
+triangle polynomial at the five touching types), the one remaining `sorry`.  Tasks 1a, 1b and 5b
+use `native_decide` and live in the separate libraries `Task1b` and `Tri5b`; the default build takes
+them as hypotheses (`thomson_eight_lower_of_tasks`).  The previous
 monolithic file is kept as `Thomson8_monolithic_backup.lean.txt`.
 -/
 

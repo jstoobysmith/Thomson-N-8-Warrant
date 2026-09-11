@@ -15,8 +15,8 @@ import Thomson.ThreePoint.MinPoly
 import Thomson.ThreePoint.CertData
 import Thomson.ThreePoint.Linear
 import Thomson.ThreePoint.Perturb
+import Thomson.ThreePoint.Slack
+import Thomson.ThreePoint.Kernel
+import Thomson.ThreePoint.Redundant
 import Thomson.ThreePoint.Tasks
 import Thomson.Main
-import Thomson.ThreePoint.Task1a
-import Thomson.ThreePoint.Task1b
-import Thomson.ThreePoint.Task5b

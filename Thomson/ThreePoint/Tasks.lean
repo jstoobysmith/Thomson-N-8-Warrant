@@ -2,34 +2,59 @@ import Thomson.ThreePoint.Linear
 import Thomson.ThreePoint.MinPoly
 import Thomson.ThreePoint.Perturb
 import Thomson.ThreePoint.Sharp
+import Thomson.Pair.Main
+import Thomson.PSD.Main
+import Thomson.ThreePoint.Redundant
 
 namespace Thomson
 open Finset Matrix
 open scoped MatrixOrder
 
-/-! # THE OPEN TASKS
-
-**Proof plans for every leaf of this file are in `plans/` (read `plans/README.md` first).  Two of
-the statements below are to be edited before work starts: the chord lower bound `24 / 25` must
-become `9619 / 10000` (the certificate is not valid on `[0.96, 0.9619]`), and `pivotEps` becomes
-`10⁻¹²`; see `plans/README.md` §2.**
+/-! # THE TASKS
 
 Blueprint §12.  The Cohn–Woo-type three-point bound is numerically sharp for `N = 8`: restricted by
-the separation theorem of §15 to inner products `t ≤ 0.5373`, its value is `E(u*)` to seven digits,
-with a certificate exactly tight at the antiprism.  The architecture of the proof is in place:
+the separation theorem of §15 to inner products `t ≤ 0.5373` (chords `s ≥ 0.9619`), its value is
+`E(u*)`, with a certificate exactly tight at the antiprism.  This file states what remains to be
+proved about that certificate, the *Tasks*, and assembles them into `exists_threePointCert_of`.
 
-* `S3`, `Fsum`, `ThreePointCert`, `bv_positivity`, `three_point_bound` — the bound, **proved**
-  (`Thomson.ThreePoint.BV`, `Thomson.ThreePoint.Bound`);
-* `Fh`, `Hp`, `pivots`, `certH` — **the certificate**, defined implicitly as the solution of a
-  24×24 linear system whose 24 rows are tightness conditions at the antiprism
-  (`Thomson.ThreePoint.Linear`; data in `Thomson.ThreePoint.CertData`).  Every definitional row
-  vanishes at the certificate (`rows_vanish`) as soon as the system is nonsingular;
-* `exists_threePointCert` — **proved** below from the Tasks;
-* `thomson_eight_lower` — **proved** from it (`Thomson.Main`).
+## Status
 
-So the open problem is exactly the `sorry`s of this file, and nothing else.  All of them are
-finite, explicit, numerically verified statements (`threepoint/task1_design2.py`,
-`threepoint/task1_design.json`).  They are independent of each other except where stated.
+| Task | statement here | status | proof |
+|---|---|---|---|
+| 1a | `Task1a` (`det ≠ 0`) | **proved** (`native_decide`) | `Task1b` library: `Thomson.Task1b.task1a` |
+| 1b | `Task1b` (pivots to `pivotEps = 10⁻¹²`) | **proved**, to `2·10⁻²¹` (`native_decide`) | `Task1b` library: `Thomson.Task1b.task1b` |
+| 1c(i) | `row_pairVal_A` | **proved** from 1a (algebra: `ring`) | `Thomson.ThreePoint.Redundant`, `Slack`, `Kernel` |
+| 1c(ii) | `row_triD_FDN_v` | **proved** from 1a (algebra + calculus) | `Thomson.ThreePoint.Redundant` |
+| 2 | `certH_posSemidef` | **proved** from 1b (`decide +kernel`) | `Thomson/PSD/`, `Thomson.PSD.hp_posSemidef` |
+| 3 | `certData_bound_eq` | **proved** (a definitional row) | below |
+| 4 | `pairP_nonneg` | **proved** from 1a, 1b, 1c(i) (`decide +kernel`) | `Thomson/Pair/`, `Thomson.Pair.pairP_nonneg_of` |
+| 5a | `triP_local : Task5a` | **open** — `sorry` | below |
+| 5b | `Task5b` | **proved** from 1b, 5a (`native_decide`) | `Tri5b` library: `Thomson.Tri5b.task5b_of_task5a` |
+| 6 | `side_conditions` | **proved** | below |
+
+**The only `sorry` of this file — and of the default build — is Task 5a (`triP_local`).**
+
+The three tasks proved with `native_decide` (1a, 1b, 5b) are kept out of the default build: their
+libraries (`lake build Task1b`, about 2 minutes; `lake build Tri5b`, about an hour of CPU) import this
+file, and the axiom `Lean.ofReduceBool` they add should not leak into everything else.  So here
+they are *propositions* (`Task1a`, `Task1b`, `Task5b`), taken as hypotheses by every theorem that
+needs them, down to `thomson_eight_lower_of_tasks` (`Thomson.Main`).  The library `Complete`
+(`Thomson/Complete.lean`, `lake build Complete`) imports all three proofs and states the main
+theorem outright; its only `sorry` is Task 5a.
+
+## The constants (all final)
+
+* chord range `[9619/10000, 2]`: `√(2 − 2·0.5373) = 0.96197…` rounded down (`pair_of_poly`,
+  `tri_of_poly`).  An earlier `24/25` made Task 5 false (`Thomson.Tri5b.Domain`);
+* `pivotEps = 10⁻¹²` — what Tasks 4 and 5b need; Task 1b gives `2·10⁻²¹`;
+* `rhoLocal = 1/500` — the radius of the cubes of Task 5a, as used by the covering of Task 5b.
+
+## The certificate
+
+`Fh`, `Hp`, `pivots`, `certH` (`Thomson.ThreePoint.Linear`, data in `CertData.lean`): the
+certificate is the solution of a 24×24 linear system whose rows are tightness conditions at the
+antiprism, so every definitional row vanishes by definition once the system is nonsingular
+(`rows_vanish`, given Task 1a).
 
 **Why the certificate is implicit.**  A rational certificate proves `E ≥ E(u*) − ε`, never
 `E ≥ E(u*)`: exact tightness at the antiprism forces the data into the degree-192 field
@@ -37,145 +62,120 @@ finite, explicit, numerically verified statements (`threepoint/task1_design2.py`
 all 29 tightness rows to `3·10⁻³⁸`) but its coordinates have 15 000-digit coefficients, so it is
 not a usable Lean object.  Instead the 24 pivot unknowns are *defined* as `pivotMatrix⁻¹ *ᵥ pivotRhs`
 with `pivotMatrix` built structurally from `S3`, the exact kernel bases `B`, and the chord lengths:
-tightness is then by definition, and what remains are *inequalities* (robust, margin `≫ 10⁻⁶`)
+tightness is then by definition, and what remains are *inequalities* (robust, margin `≫ pivotEps`)
 plus `det ≠ 0` and an enclosure of the pivots.
 
-**Numbers** (`task1_design2.py`, inner-product form of the rows; the chord form used here has the
-same solution): pivot block condition `2.2·10⁵`, `‖M‖∞ ≈ 1.3·10²`, `‖M⁻¹‖∞ ≈ 9.4·10³`;
-`H'_k` smallest eigenvalues `1.4e−3, 1.2e−3, 5.9e−4, 1.4e−3, 1.4e−3, 1.5e−3`; the exact pivots
-agree with `pivotsNum` to `4·10⁻²²`; pair polynomial `≥ 0` on `[24/25, 2]` with exact double zeros
-at the chords; triangle slack `≥ 0` on `Δ ∩ [−1, 0.5373]³` with exact second-order zeros at the five
-types (Hessians `⪰ 2·10⁻⁴` in inner-product variables).
+**Numbers** (`threepoint/task1_design2.py`; `plans/README.md` §3): `‖pivotMatrix‖∞ ≈ 1.3·10²`,
+`‖pivotMatrix⁻¹‖∞ ≈ 3.9·10³`; smallest eigenvalues of `H'_k`: `1.4e−3, 1.2e−3, 5.9e−4, 1.4e−3,
+1.4e−3, 1.5e−3`; the exact pivots agree with `pivotsNum` to `4·10⁻²²`; pair polynomial `≥ 0` on
+`[9619/10000, 2]` with exact double zeros at the chords; triangle polynomial `≥ 0` on
+`Δ ∩ [9619/10000, 2]³` (minimum `+1.5·10⁻⁵` away from the types) with exact second-order zeros at
+the five types, Hessians in chord variables `⪰ 6.4·10⁻⁴`.
 
 **Redundancies** (rank 24 of 26 rows).  The bound row is a combination of the nine value rows,
 and one combination of all rows vanishes identically (the derivative of the slack identity along
 the antiprism family); both follow from the kernel structure of `B` — this is Task 1c. -/
 
-/-- The precision of the pivot enclosure (Task 1b); Task 2 needs `pivotEps < λ_min/28 ≈ 2·10⁻⁵`. -/
-noncomputable def pivotEps : ℝ := 1 / 10 ^ 6
+/-- The precision of the pivot enclosure (Task 1b).  Task 2 needs `pivotEps < λ_min/28 ≈ 2·10⁻⁵`;
+Tasks 4 and 5b need `10⁻¹²`: just outside a `rhoLocal`-cube `triP` is only `≈ 10⁻⁹`, and near the
+chord `F` the interval enclosure of the pair polynomial's second derivative at `10⁻⁶` is as wide
+as the second derivative itself. -/
+noncomputable def pivotEps : ℝ := 1 / 10 ^ 12
 
 /-! ## Task 1 — the pivot system -/
 
-/-- **Task 1a — the pivot system is nonsingular.**
-*Sketch.*  Let `N` be the rational 24×24 matrix of `threepoint/task1_design.json` (`approx_inverse`,
-the double-precision inverse of the chord-form system).  Show `‖I − N * pivotMatrix‖∞ < 1` by
-interval arithmetic.  The entries are already reduced to a single explicit quantity: by
-`pivotMatrix_bound_row`, `pivotMatrix_pairVal_row`, `pivotMatrix_pairDer_row`,
-`pivotMatrix_triVal_row`, `pivotMatrix_triD_row` (`Thomson.ThreePoint.Perturb`) every entry is a
-fixed multiple (or a `deriv`) of `Gh j u v t`, the `(a,b)` entry of `B_kᵀ S3_k(u,v,t) B_k` at the
-slot of pivot `j` — an explicit polynomial in `uStar, √2, rStar, s2Star, s4Star` with no reference to
-`Hfix`; for the derivative rows rewrite `deriv` by `HasDerivAt.deriv`.  The enclosures needed
-(`~10⁻⁵` per entry, since the entries are `O(1)`–`O(10²)` and `‖N‖∞ ≈ 10⁴`) are available in the
-sharp form of Task 1b: `sqrt2_bounds_sharp`, `uStar_mem_Icc_sharp`, `rStar_bounds_sharp`,
-`s2Star_bounds_sharp`, `s4Star_bounds_sharp`.  Then `pivotMatrix *ᵥ x = 0` gives
-`x = (I − N * pivotMatrix) *ᵥ x`, so `‖x‖∞ ≤ ‖I − N M‖∞ ‖x‖∞ < ‖x‖∞` unless `x = 0`; conclude with
-`Matrix.mulVec_injective_iff_isUnit` (or `Matrix.exists_mulVec_eq_zero_iff`). -/
-theorem pivotMatrix_det_isUnit : IsUnit pivotMatrix.det := sorry
+/-- **Task 1a — the pivot system is nonsingular.**  **Proved** in the `Task1b` library
+(`Thomson.Task1b.pivotMatrix_det_isUnit`): with `N` the rational approximate inverse of
+`threepoint/task1_design.json` (first column halved, see `Thomson/Task1b/README.md`),
+`‖I − N·pivotMatrix‖∞ ≤ 10⁻¹¹ < 1` by interval arithmetic at `10⁻⁴⁰`, so `pivotMatrix` is
+injective (`Matrix.mulVec_injective_iff_isUnit`). -/
+def Task1a : Prop := IsUnit pivotMatrix.det
 
-/-- **Task 1b — enclosure of the pivots.**
-*Sketch.*  With `N`, `E := I − N * pivotMatrix`, `‖E‖∞ ≤ η < 1` from Task 1a:
-`pivots − pivotsNum = pivotMatrix⁻¹ *ᵥ (pivotRhs − pivotMatrix *ᵥ pivotsNum)` and
-`‖pivotMatrix⁻¹‖∞ ≤ ‖N‖∞/(1 − η)`.  The residual `pivotRhs − pivotMatrix *ᵥ pivotsNum` is an
-explicit expression (the rows evaluated at `pivotsNum`, `rowFun_eq_mulVec`); its true value is
-`≈ 10⁻²¹`, so the bound is limited only by the enclosures: `uStar` to `13` digits gives
-`‖residual‖∞ ≲ 10⁻¹⁰` and `‖pivots − pivotsNum‖∞ ≲ 10⁻⁶`.
-**The enclosures this needs are now proved**: `sqrt2_bounds_sharp` (28 digits),
-`uStar_mem_Icc_sharp` (13 digits, `u* = 0.3140893678892…`, `Thomson.Enclosure`) and
-`rStar_bounds_sharp`, `s2Star_bounds_sharp`, `s4Star_bounds_sharp` (25 digits,
-`Thomson.ThreePoint.Sharp`).  What remains is the residual estimate itself. -/
-theorem pivots_close : ∀ j, |pivots j - pivotsNum j| ≤ pivotEps := sorry
+/-- **Task 1b — enclosure of the pivots**, to `pivotEps = 10⁻¹²`.  **Proved** in the `Task1b`
+library (`Thomson.Task1b.pivots_close_sharp`: `|pivots j − pivotsNum j| ≤ 2·10⁻²¹`), by the same
+contraction: `pivots − pivotsNum = pivotMatrix⁻¹ (pivotRhs − pivotMatrix pivotsNum)`, the residual
+enclosed with the sharp enclosures of `u*, √2, r, s₂, s₄` (`Thomson.Enclosure`,
+`Thomson.ThreePoint.Sharp`). -/
+def Task1b : Prop := ∀ j, |pivots j - pivotsNum j| ≤ pivotEps
 
 /-! ### Consequences of Task 1b: the pivots may be replaced by `pivotsNum`
 
 Everything built from the certificate is affine in the pivots (`Thomson.ThreePoint.Linear`), so
 Task 1b bounds the error made by evaluating at the rational reference vector `pivotsNum` instead —
-by `pivotEps` times an explicit rational ℓ¹-norm (`Thomson.ThreePoint.Perturb`).  These are the
-estimates Tasks 2, 4 and 5 use; note that they may be applied only *after* the tangencies have been
-divided out (the cofactor `Q` of Task 4, the Hessian form of Task 5a), since at a touching point the
+by `pivotEps` times an explicit rational ℓ¹-norm (`Thomson.ThreePoint.Perturb`).  Note that they
+may be applied only *after* the tangencies have been divided out, since at a touching point the
 polynomial itself vanishes and no uniform margin is available. -/
 
 /-- Task 2's perturbation `Δ_k`: entrywise, supported on the slots of block `k`. -/
-theorem certH_sub_pivotsNum_le (k : Fin 6) (a b : Fin (9 - (k : ℕ))) :
+theorem certH_sub_pivotsNum_le (h1b : Task1b) (k : Fin 6) (a b : Fin (9 - (k : ℕ))) :
     |certH k a b - Hp pivotsNum k a b| ≤ pivotEps * ∑ j, eH j (k : ℕ) (a : ℕ) (b : ℕ) :=
-  abs_Hp_sub_apply_le pivots_close k a b
+  abs_Hp_sub_apply_le h1b k a b
 
-/-- Task 4's perturbation, at a fixed chord length. -/
-theorem pairP_sub_pivotsNum_le (s : ℝ) :
+/-- The pair polynomial's perturbation, at a fixed chord length. -/
+theorem pairP_sub_pivotsNum_le (h1b : Task1b) (s : ℝ) :
     |pairP pivots s - pairP pivotsNum s|
       ≤ pivotEps * ∑ j, |pairP (Pi.single j 1) s - pairP 0 s| :=
-  pairP_perturb pivots_close s
+  pairP_perturb h1b s
 
-/-- Task 5's perturbation, at a fixed chord triple. -/
-theorem triP_sub_pivotsNum_le (a b c : ℝ) :
+/-- The triangle polynomial's perturbation, at a fixed chord triple. -/
+theorem triP_sub_pivotsNum_le (h1b : Task1b) (a b c : ℝ) :
     |triP pivots a b c - triP pivotsNum a b c|
       ≤ pivotEps * ∑ j, |triP (Pi.single j 1) a b c - triP 0 a b c| :=
-  triP_perturb pivots_close a b c
+  triP_perturb h1b a b c
 
-/-- **Task 1c(i) — the dropped value row** (pair value at the chord `A = √2·r`).
-*Sketch.*  The slack identity at the antiprism `x(u) := antiprism √u` (blueprint §12.2; it is the
-algebra of `three_point_bound` as an equality): for every `p`,
-`2·(E(u) − bound(p)) = 2·Σ_X mult_X · pairP p (s_X)/s_X + 6·Σ_m mult_m · triP p τ_m/(Π τ_m)
-  + a1Fix·‖Σᵢ xᵢ‖² + Σ_{i,j,l} Fh (Hp p) ⟪xᵢ,xⱼ⟫ ⟪xᵢ,xₗ⟫ ⟪xⱼ,xₗ⟫`,
-with multiplicities `A 8, D 4, N 8, F 8` and `FFA 8, FDN 16, FNA 16, DAA 8, NNA 8`.  At `u = u*`:
-`Σᵢ xᵢ = 0`; and the last sum is `Σ_k Σ_i g_k(i)ᵀ H'_k g_k(i)` with `g_k(i) = B_kᵀ m_k(i)`, where
-`m_k(i)(u) m_k(i)(u)ᵀ ∝ Σ_{j,l} S3 k ⟪xᵢ,xⱼ⟫ ⟪xᵢ,xₗ⟫ ⟪xⱼ,xₗ⟫` has rank one with range `v_k(u)`
-(**kernel lemma**: polynomial identities in `u, √2`, `threepoint/exact_kernels.py`,
-`kernel_vectors_exact.json`), and `B_kᵀ v_k(u*) = 0` by construction of `B` (`Bpoly`: column
-`a` is `c_a(d_i e_i − n_i e_{p₀})`, orthogonal to `v_k = (n_i/d_i)`) — so the last two terms vanish
-identically in `p`.  With `row_bound`, `row_pairVal` (`X ≠ 0`) and `row_triVal`, only
-`16 · pairP pivots (chord 0)/chord 0` is left.
-*Alternative (mechanical):* the identity restricted to the 24 pivot columns and the constant column
-is 25 polynomial identities in `K` modulo `rStar_sq, s2Star_sq, s4Star_sq, √2² = 2` only (no
-minimal polynomial: it holds for every `u`), each by `linear_combination`. -/
-theorem row_pairVal_A : pairP pivots (chord 0) = 0 := sorry
+/-- **Task 1c(i) — the dropped value row** (pair value at the chord `A = √2·r`).  **Proved**
+(`Thomson.ThreePoint.Redundant`).  The slack identity along the antiprism family
+(`Thomson.ThreePoint.Slack`, the algebra of `three_point_bound` as an equality): for every `p` and
+`u ∈ [0, 1)`,
+`2·E(u) − (64a₀ − 8(a₀+a₁) − 8F(1,1,1)) = pairSum p u + triSum p u + bvTerm p u`,
+with `bvTerm p u = Σ_k ⟨Hp p k, B_kᵀ Acomb_k(u) B_k⟩`.  **Kernel lemma**
+(`Thomson.ThreePoint.Kernel`, generated by `threepoint/kernel_lean.py`):
+`(B_kᵀ Acomb_k(u) B_k)[a,b] = (u − u*)²·χ_kab(u)`, 155 polynomial identities in `u, u*` after the
+`√2` of `Acomb` has been eliminated (155 more), so `bvTerm p` has a double zero at `u*` for every
+`p`.  At `u = u*` the left side vanishes (`row_bound`), and so does every slack but
+`16 · pairP pivots (chord 0)/chord 0` (`row_pairVal`, `row_triVal`). -/
+theorem row_pairVal_A (h1a : Task1a) : pairP pivots (chord 0) = 0 := row_pairVal_A_of h1a
 
 /-- **Task 1c(ii) — the dropped gradient row** (`v`-derivative at the type `FDN = (s₄, 2r, s₂)`).
-*Sketch.*  Differentiate the slack identity of 1c(i) along the family at `u*`.  Left side:
-`2·E′(u*) = 0` (`antiprismEnergy'_uStar`).  Right side: each pair term
-`d/du [pairP(s_X(u))/s_X(u)]` vanishes by `row_pairVal`/`row_pairVal_A` and `row_pairDer`; each
-triangle term `d/du [triP(τ_m(u))/Π(u)] = (∇triP(τ_m)·τ_m′)/Π − triP(τ_m)Π′/Π²` vanishes by
-`row_triVal` and `row_triD` except the single component `∂_v triP(τ_FDN) · (2r)′(u*)`, with
-`(2√(1−u))′ = −1/√(1−u) ≠ 0`; the positivity terms are `≥ 0`, vanish at `u*`, hence have zero
-derivative — or directly: `Σ_k Σ_i g_k(i)(u)ᵀ H'_k g_k(i)(u)` is quadratic in `g_k(i)(u)` with
-`g_k(i)(u*) = 0`.  Hence `16 · ∂_v triP(τ_FDN) · (−1/r) = 0`. -/
-theorem row_triD_FDN_v : deriv (triD pivots 1 1) 0 = 0 := sorry
+**Proved** (`Thomson.ThreePoint.Redundant`): differentiate the slack identity along the family at
+`u*`.  The left side has derivative `2·E′(u*) = 0`; the pair slacks and `bvTerm` have double zeros;
+each triangle slack has derivative `∇triP(τ_m)·τ_m′/Π`, which vanishes by `row_triD` except for the
+single component `∂_v triP(τ_FDN) · (2r)′(u*)`, and `(2√(1−u))′ ≠ 0`. -/
+theorem row_triD_FDN_v (h1a : Task1a) : deriv (triD pivots 1 1) 0 = 0 := row_triD_FDN_v_of h1a
 
-/-! ### Consequences: full tightness (proved from 1a and 1c) -/
+/-! ### Consequences: full tightness (from 1a and 1c) -/
 
 /-- The pair polynomial has a double zero at each of the four chord lengths. -/
-theorem pairP_tight (X : Fin 4) :
+theorem pairP_tight (h1a : Task1a) (X : Fin 4) :
     pairP pivots (chord X) = 0 ∧ deriv (pairP pivots) (chord X) = 0 := by
-  refine ⟨?_, row_pairDer pivotMatrix_det_isUnit X⟩
+  refine ⟨?_, row_pairDer h1a X⟩
   by_cases hX : X = 0
-  · subst hX; exact row_pairVal_A
-  · exact row_pairVal pivotMatrix_det_isUnit X hX
+  · subst hX; exact row_pairVal_A h1a
+  · exact row_pairVal h1a X hX
 
 /-- The triangle polynomial vanishes to second order at each of the five types. -/
-theorem triP_tight (m : Fin 5) :
+theorem triP_tight (h1a : Task1a) (m : Fin 5) :
     triP pivots (touchType m).1 (touchType m).2.1 (touchType m).2.2 = 0 ∧
       ∀ c : Fin 3, deriv (triD pivots m c) 0 = 0 := by
-  refine ⟨row_triVal pivotMatrix_det_isUnit m, fun c => ?_⟩
+  refine ⟨row_triVal h1a m, fun c => ?_⟩
   by_cases h : (m, c) = (1, 1)
-  · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact row_triD_FDN_v
-  · exact row_triD pivotMatrix_det_isUnit m c h
+  · obtain ⟨rfl, rfl⟩ := Prod.mk.inj h; exact row_triD_FDN_v h1a
+  · exact row_triD h1a m c h
 
 /-! ## Task 2 — positive semidefiniteness -/
 
-/-- **Task 2 — the blocks are positive semidefinite.**
-*Sketch.*  `certH k = Hp pivots k = Hp pivotsNum k + Δ_k`, where `Δ_k` is supported on the slots of
-block `k` with entries `pivots j − pivotsNum j`, `|·| ≤ pivotEps` (Task 1b).  `Hp pivotsNum k` is an
-explicit rational symmetric matrix; compute its exact rational `LDLᵀ` after subtracting
-`λ_k · 1` with `λ_k` just below its smallest eigenvalue (`λ_k ≥ 5.9·10⁻⁴`, see the header), so that
-`x ⬝ᵥ (Hp pivotsNum k *ᵥ x) ≥ λ_k ‖x‖²` is a sum of squares (`nlinarith`/`linear_combination`).
-Then `|x ⬝ᵥ (Δ_k *ᵥ x)| ≤ 2·(#slots of `k`)·pivotEps·‖x‖² ≤ 14·pivotEps·‖x‖²`, and
-`Matrix.PosSemidef.of_dotProduct_mulVec_nonneg` (Hermitian: `Hp` is symmetric by `Hfix`/`eH`)
-finishes since `λ_k > 14·pivotEps`.  The unused last row/column (`a = 8 − k`) is zero. -/
-theorem certH_posSemidef (k : Fin 6) : (certH k).PosSemidef := sorry
+/-- **Task 2 — the blocks are positive semidefinite.**  **Proved** in `Thomson/PSD/`
+(`Thomson.PSD.hp_posSemidef`; `decide +kernel` only).  For each block, `Hp p k = L D Lᵀ + N` with
+`L`, `D` the rounded `LDLᵀ` factors of `Hp pivotsNum k − μ_k·P` on the `10⁻⁴⁰` grid
+(`threepoint/psd_gen.py`): `D ≥ 0`, and `N ≈ μ_k·P` is diagonally dominant for every `p` within
+`10⁻¹²` of `pivotsNum` (Task 1b), with slack `≈ λ_min ∈ [5.9·10⁻⁴, 1.5·10⁻³]`. -/
+theorem certH_posSemidef (h1b : Task1b) (k : Fin 6) : (certH k).PosSemidef :=
+  PSD.hp_posSemidef (fun j => (h1b j).trans (by unfold pivotEps; norm_num)) k
 
 /-- The factorisation `certH k = Aᵀ A` used by the glue (from Task 2 via the matrix square root). -/
-theorem certH_factor (k : Fin 6) :
+theorem certH_factor (h1b : Task1b) (k : Fin 6) :
     ∃ A : Matrix (Fin (9 - (k : ℕ))) (Fin (9 - (k : ℕ))) ℝ, certH k = Aᵀ * A := by
-  have h0 : 0 ≤ certH k := (certH_posSemidef k).nonneg
+  have h0 : 0 ≤ certH k := (certH_posSemidef h1b k).nonneg
   refine ⟨CFC.sqrt (certH k), ?_⟩
   have hs := CFC.sqrt_mul_sqrt_self (certH k) h0
   have hsa : IsSelfAdjoint (CFC.sqrt (certH k)) := IsSelfAdjoint.of_nonneg (CFC.sqrt_nonneg _)
@@ -184,62 +184,66 @@ theorem certH_factor (k : Fin 6) :
     rwa [Matrix.star_eq_conjTranspose, Matrix.conjTranspose_eq_transpose_of_trivial] at this
   rw [hT, hs]
 
-/-! ## Task 3 — the bound (PROVED: it is a definitional row) -/
+/-! ## Task 3 — the bound (**proved**: it is a definitional row) -/
 
-theorem certData_bound_eq :
+theorem certData_bound_eq (h1a : Task1a) :
     (64 * a0Fix - 8 * (a0Fix + a1Fix) - 8 * Fh certH 1 1 1) / 2 = antiprismEnergy uStar :=
-  row_bound pivotMatrix_det_isUnit
+  row_bound h1a
 
-/-! ## Task 4 — the pair inequality -/
+/-! ## Task 4 — the pair inequality (**proved**, from 1a, 1b, 1c(i)) -/
 
-/-- **Task 4 — the pair inequality on `[24/25, 2]`.**
-*Sketch.*  `pairP pivots` is a polynomial in `s` of degree `≤ 43` (by `S3_one_apply`, `F(1,t,t)`
-is explicit: `(S3 k 1 t t)ᵢⱼ = (1/3) tⁱ⁺ʲ(1−t²)ᵏ` for `k ≥ 1`, `(1/3)(tⁱ + tʲ + tⁱ⁺ʲ)` for `k = 0`),
-with coefficients affine in `pivots`.  Package it as `P : Polynomial ℝ` with `P.eval s = pairP
-pivots s`; `pairP_tight` and `Polynomial.deriv` give `P.IsRoot s_X` and `(derivative P).IsRoot s_X`
-at the four distinct chords (`√2 r < s₂ < 2r < s₄`, from the `_bounds` lemmas), hence
-`(X − C s_X)² ∣ P` (`Polynomial.mul_divByMonic_eq_iff_isRoot` twice, or
-`Polynomial.lt_rootMultiplicity_iff_isRoot_iterate_derivative`), hence `P = q² · Q` with
-`q = Π (X − C s_X)` and `Q := P /ₘ q²`.  `Q` has coefficients affine in `pivots`; at `pivotsNum`
-its Bernstein coefficients on `[24/25, 2]` are positive with a margin (to compute:
-`threepoint/`, following `hp_project.py`), and `|Q(pivots) − Q(pivotsNum)| ≤ C·pivotEps`
-termwise.  Conclude with `bernstein_nonneg` and `nonneg_of_four_double_zeros`. -/
-theorem pairP_nonneg : ∀ s : ℝ, 24 / 25 ≤ s → s ≤ 2 → 0 ≤ pairP pivots s := sorry
+/-- **Task 4 — the pair inequality on `[9619/10000, 2]`.**  **Proved** in `Thomson/Pair/`
+(`Thomson.Pair.pairP_nonneg_of`, on the larger range `[24/25, 2]`; `decide +kernel` only, no
+`native_decide`), from the double zeros at the chords (`pairP_tight`, i.e. Tasks 1a and 1c(i)) and
+Task 1b.  In `w = 1 − s²/2` it suffices that `Φ(w) = α² − (2 − 2w) R(w)² ≥ 0`, where
+`pairP pivots s = α − s R(w)`; `Φ` is a polynomial of degree `33` with double zeros at the four
+chords, and eight sweeps integrate an interval lower bound for `Φ''` outwards from them
+(`Thomson.Pair.Sweep`). -/
+theorem pairP_nonneg (h1a : Task1a) (h1b : Task1b) :
+    ∀ s : ℝ, 9619 / 10000 ≤ s → s ≤ 2 → 0 ≤ pairP pivots s := fun s hs1 hs2 =>
+  Pair.pairP_nonneg_of (pairP_tight h1a) h1b s (le_trans (by norm_num) hs1) hs2
 
 /-! ## Task 5 — the triangle inequality -/
 
-/-- Radius of the locally controlled cube around each touching type (a parameter: choose it so that
-Task 5a holds with the Hessian margin available; larger `ρ` means fewer boxes in Task 5b). -/
+/-- Radius of the locally controlled cube around each touching type: Task 5a is asked on these
+cubes, and the covering of Task 5b is built outside them. -/
 noncomputable def rhoLocal : ℝ := 1 / 500
 
-/-- **Task 5a — local positivity at a touching type** (five instances).
-*Sketch.*  By `triP_tight m`, the expansion of `triP pivots` about `τ_m` has no constant or linear
-term: `triP (τ_m + δ) = ½ δᵀ H_m δ + Σ_{|α| ≥ 3} c_α δ^α` (an exact polynomial identity in `δ`,
-obtained by `ring_nf` after substituting; the coefficients are affine in `pivots`).  Provide
-`lamLocal m` with `H_m ⪰ lamLocal m · I` at `pivotsNum` minus the `pivotEps` perturbation
-(numerically the Hessians of the slack in inner-product variables are `⪰ 2·10⁻⁴`; in chord variables
-`triP = abc · slack`, so `H_m = abc · H_m^{slack}` up to the chain rule — recompute with
-`threepoint/hessians.py`), and `MLocal m` bounding `Σ_{|α| ≥ 3} |c_α| ρ^{|α|−3}`; then
-`local_nonneg_of_hessian` with `9 · MLocal m · rhoLocal ≤ lamLocal m`. -/
-theorem triP_local (m : Fin 5) : ∀ a b c : ℝ,
+/-- The statement of Task 5a: local positivity on the cube of radius `rhoLocal` about each of the
+five touching types. -/
+def Task5a : Prop := ∀ m : Fin 5, ∀ a b c : ℝ,
     |a - (touchType m).1| ≤ rhoLocal → |b - (touchType m).2.1| ≤ rhoLocal →
-    |c - (touchType m).2.2| ≤ rhoLocal → 0 ≤ triP pivots a b c := sorry
+    |c - (touchType m).2.2| ≤ rhoLocal → 0 ≤ triP pivots a b c
 
-/-- **Task 5b — global positivity away from the touching types**, by a Bernstein box covering of
-`{(a,b,c) ∈ [24/25, 2]³ : G ≥ 0} \ ⋃_m cube(τ_m, rhoLocal)` (`bernstein_nonneg_3d`, with
-`nonneg_of_s_procedure` on boxes meeting the Gram boundary `G = 0`).  The box list is generated
-externally for `triP pivotsNum` with margin `≫ pivotEps · (sum of |coefficients|)`; one mechanical
-lemma per box. -/
-theorem triP_global : ∀ a b c : ℝ, 24 / 25 ≤ a → 24 / 25 ≤ b → 24 / 25 ≤ c →
+/-- **Task 5a — local positivity at a touching type** (five instances).  **Open.**
+*Plan*: `plans/T5a-TriLocal.md`.
+*Sketch.*  By `triP_tight m`, the expansion of `triP pivots` about `τ_m` has no constant or linear
+term: `triP (τ_m + δ) = ½ δᵀ H_m δ + Σ_{|α| ≥ 3} c_α δ^α` (the coefficients are affine in `pivots`;
+the Taylor-shift machinery of `Thomson/Tri5b/` computes them as interval tensors).  Show
+`H_m ⪰ lamLocal m · I` at `pivotsNum` minus the `pivotEps` perturbation (Hessian eigenvalues in
+chord variables: smallest `9.3e−4, 2.0e−3, 9.3e−4, 6.4e−4, 8.4e−4` for types `0..4`), and bound
+`Σ_{|α| ≥ 3} |c_α| ρ^{|α|−3}` by `MLocal m`; then `local_nonneg_of_hessian` with
+`9 · MLocal m · rhoLocal ≤ lamLocal m`. -/
+theorem triP_local (h1a : Task1a) (h1b : Task1b) : Task5a := sorry
+
+/-- **Task 5b — global positivity away from the touching types**, on `[9619/10000, 2]³ ∩ {G ≥ 0}`
+outside the five `rhoLocal`-cubes.  **Proved** in the `Tri5b` library
+(`Thomson.Tri5b.task5b_of_task5a`, from Task 5a; Task 1b enters through its proof): a covering by
+107 × ≈ 900 boxes, each checked by Taylor expansion of the coefficient tensor in fixed-point
+interval arithmetic, with the S-procedure on boxes meeting the Gram boundary `G = 0`;
+`native_decide`.  See `Thomson/Tri5b/README.md`. -/
+def Task5b : Prop :=
+  ∀ a b c : ℝ, 9619 / 10000 ≤ a → 9619 / 10000 ≤ b → 9619 / 10000 ≤ c →
     a ≤ 2 → b ≤ 2 → c ≤ 2 →
     0 ≤ 1 + 2 * (1 - a ^ 2 / 2) * (1 - b ^ 2 / 2) * (1 - c ^ 2 / 2)
         - (1 - a ^ 2 / 2) ^ 2 - (1 - b ^ 2 / 2) ^ 2 - (1 - c ^ 2 / 2) ^ 2 →
     (∀ m : Fin 5, rhoLocal < |a - (touchType m).1| ∨ rhoLocal < |b - (touchType m).2.1|
       ∨ rhoLocal < |c - (touchType m).2.2|) →
-    0 ≤ triP pivots a b c := sorry
+    0 ≤ triP pivots a b c
 
 /-- **Task 5 — the triangle inequality**, assembled from 5a and 5b.  **Proved** modulo them. -/
-theorem triP_nonneg : ∀ a b c : ℝ, 24 / 25 ≤ a → 24 / 25 ≤ b → 24 / 25 ≤ c →
+theorem triP_nonneg (h5a : Task5a) (h5b : Task5b) :
+    ∀ a b c : ℝ, 9619 / 10000 ≤ a → 9619 / 10000 ≤ b → 9619 / 10000 ≤ c →
     a ≤ 2 → b ≤ 2 → c ≤ 2 →
     0 ≤ 1 + 2 * (1 - a ^ 2 / 2) * (1 - b ^ 2 / 2) * (1 - c ^ 2 / 2)
         - (1 - a ^ 2 / 2) ^ 2 - (1 - b ^ 2 / 2) ^ 2 - (1 - c ^ 2 / 2) ^ 2 →
@@ -248,14 +252,14 @@ theorem triP_nonneg : ∀ a b c : ℝ, 24 / 25 ≤ a → 24 / 25 ≤ b → 24 / 
   by_cases hloc : ∃ m : Fin 5, |a - (touchType m).1| ≤ rhoLocal ∧ |b - (touchType m).2.1| ≤ rhoLocal
       ∧ |c - (touchType m).2.2| ≤ rhoLocal
   · obtain ⟨m, h1, h2, h3⟩ := hloc
-    exact triP_local m a b c h1 h2 h3
+    exact h5a m a b c h1 h2 h3
   · push Not at hloc
-    refine triP_global a b c ha1 hb1 hc1 ha2 hb2 hc2 hG fun m => ?_
+    refine h5b a b c ha1 hb1 hc1 ha2 hb2 hc2 hG fun m => ?_
     by_contra hcon
     push Not at hcon
     exact absurd (hloc m hcon.1 hcon.2.1) (not_lt.mpr hcon.2.2)
 
-/-! ## Task 6 — the side conditions (PROVED: the data are rational) -/
+/-! ## Task 6 — the side conditions (**proved**: the data are rational) -/
 
 theorem side_conditions : 0 ≤ a1Fix ∧ 0 ≤ lamFix ∧ lamFix ≤ 1 / 18 := by
   norm_num [a1Fix, lamFix]
@@ -270,9 +274,12 @@ theorem Fsum_certH (A : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 - (
     Fsum (fun k => A k * (B k)ᵀ) (fun _ _ => 1) u v t = Fh certH u v t := by
   rw [Fsum_eq_Fh]; congr 1; funext k; exact (hA k).symm
 
-/-- **The certificate exists**, assembled from the Tasks.  **Proved** modulo them. -/
-theorem exists_threePointCert : Nonempty ThreePointCert := by
-  choose A hA using certH_factor
+/-- **The certificate exists**, assembled from the Tasks.  The hypotheses are the three tasks
+proved outside the default build (`Complete.lean` discharges them); the one open task, 5a, enters
+through its `sorry`. -/
+theorem exists_threePointCert_of_tasks (h1a : Task1a) (h1b : Task1b) (h5b : Task5b) :
+    Nonempty ThreePointCert := by
+  choose A hA using certH_factor h1b
   have hF := Fsum_certH A hA
   refine ⟨{
     a0 := a0Fix, a1 := a1Fix, lam := lamFix, L := (fun k => A k * (B k)ᵀ), D := (fun _ _ => 1),
@@ -280,9 +287,9 @@ theorem exists_threePointCert : Nonempty ThreePointCert := by
     a1_nonneg := side_conditions.1,
     lam_nonneg := side_conditions.2.1,
     lam_le := side_conditions.2.2,
-    pair := pair_of_poly _ _ _ _ _ fun s h1 h2 => by rw [hF]; exact pairP_nonneg s h1 h2,
+    pair := pair_of_poly _ _ _ _ _ fun s h1 h2 => by rw [hF]; exact pairP_nonneg h1a h1b s h1 h2,
     tri := tri_of_poly _ _ _ fun a b c ha1 hb1 hc1 ha2 hb2 hc2 hG => by
-      rw [hF]; exact triP_nonneg a b c ha1 hb1 hc1 ha2 hb2 hc2 hG,
-    bound_ge := by rw [hF, certData_bound_eq] }⟩
+      rw [hF]; exact triP_nonneg (triP_local h1a h1b) h5b a b c ha1 hb1 hc1 ha2 hb2 hc2 hG,
+    bound_ge := by rw [hF, certData_bound_eq h1a] }⟩
 
 end Thomson

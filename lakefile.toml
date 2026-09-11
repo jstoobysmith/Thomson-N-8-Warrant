@@ -40,6 +40,21 @@ leanOptions = { autoImplicit = false }
 srcDir = "."
 globs = ["Thomson.Pair.+"]
 
+# Task 2 (positive semidefiniteness): `decide +kernel` only, no `native_decide`.  `lake build PSD`.
+[[lean_lib]]
+name = "PSD"
+leanOptions = { autoImplicit = false }
+srcDir = "."
+globs = ["Thomson.PSD.+"]
+
+# The main theorem with Tasks 1a, 1b, 5b discharged (`Thomson.Complete`): builds `Task1b` and
+# `Tri5b`.  `lake build Complete`.
+[[lean_lib]]
+name = "Complete"
+leanOptions = { autoImplicit = false }
+srcDir = "."
+roots = ["Thomson.Complete"]
+
 [[lean_lib]]
 name = "Thomson8"
 leanOptions = { autoImplicit = false }

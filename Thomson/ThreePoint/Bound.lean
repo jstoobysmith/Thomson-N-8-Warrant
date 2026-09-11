@@ -46,10 +46,12 @@ variable, as in `yudinF12_le_inv`) and a 3-dimensional interval verification (`t
 establish; blueprint §12.7, steps 2–4. -/
 
 /-- The `pair` obligation as a polynomial inequality in the chord length `s = √(2−2t)`:
-it suffices that `(1 − 18λ) − s·[a₀ + a₁ t + 3F(1,t,t)] ≥ 0` for `s ∈ [0.96, 2]`, `t = 1 − s²/2`. -/
+it suffices that `(1 − 18λ) − s·[a₀ + a₁ t + 3F(1,t,t)] ≥ 0` for `s ∈ [0.9619, 2]`, `t = 1 − s²/2`.
+The lower end is `√(2 − 2·0.5373) = 0.96197…` (the separation theorem's `t ≤ 0.5373`) rounded down;
+it was `24/25` once, which is too generous for the triangle inequality (`tri_of_poly`). -/
 theorem pair_of_poly (L : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 - (k : ℕ))) ℝ)
     (D : (k : Fin 6) → Fin (9 - (k : ℕ)) → ℝ) (a0 a1 lam : ℝ)
-    (h : ∀ s : ℝ, 24 / 25 ≤ s → s ≤ 2 →
+    (h : ∀ s : ℝ, 9619 / 10000 ≤ s → s ≤ 2 →
       0 ≤ (1 - 18 * lam) - s * (a0 + a1 * (1 - s ^ 2 / 2) + 3 * Fsum L D 1 (1 - s ^ 2 / 2) (1 - s ^ 2 / 2))) :
     ∀ t : ℝ, -1 ≤ t → t ≤ 5373 / 10000 →
       a0 + a1 * t + 3 * Fsum L D 1 t t ≤ (1 - 18 * lam) * (Real.sqrt (2 - 2 * t))⁻¹ := by
@@ -58,7 +60,7 @@ theorem pair_of_poly (L : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 -
   have h2t : 0 ≤ 2 - 2 * t := by linarith
   have hs2 : s ^ 2 = 2 - 2 * t := Real.sq_sqrt h2t
   have hspos : 0 < s := Real.sqrt_pos.mpr (by linarith)
-  have hslo : 24 / 25 ≤ s := by
+  have hslo : 9619 / 10000 ≤ s := by
     rw [hs, Real.le_sqrt (by norm_num) h2t]; linarith
   have hshi : s ≤ 2 := by
     rw [hs, Real.sqrt_le_left (by norm_num)]; linarith
@@ -69,10 +71,12 @@ theorem pair_of_poly (L : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 -
   linarith
 
 /-- The `tri` obligation as a polynomial inequality in the three chord lengths `p, q, r`:
-`λ(qr + pr + pq) − pqr·F ≥ 0` where `u = 1 − p²/2` etc. -/
+`λ(qr + pr + pq) − pqr·F ≥ 0` where `u = 1 − p²/2` etc., for chords in `[0.9619, 2]`.
+The certificate is *not* nonnegative on the larger range `[24/25, 2]³` (`Thomson.Tri5b.Domain`):
+the chord bound has to be the true one, `(9619/10000)² ≤ 2 − 2·(5373/10000)`. -/
 theorem tri_of_poly (L : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 - (k : ℕ))) ℝ)
     (D : (k : Fin 6) → Fin (9 - (k : ℕ)) → ℝ) (lam : ℝ)
-    (h : ∀ p q r : ℝ, 24 / 25 ≤ p → 24 / 25 ≤ q → 24 / 25 ≤ r → p ≤ 2 → q ≤ 2 → r ≤ 2 →
+    (h : ∀ p q r : ℝ, 9619 / 10000 ≤ p → 9619 / 10000 ≤ q → 9619 / 10000 ≤ r → p ≤ 2 → q ≤ 2 → r ≤ 2 →
       0 ≤ 1 + 2 * (1 - p ^ 2 / 2) * (1 - q ^ 2 / 2) * (1 - r ^ 2 / 2)
           - (1 - p ^ 2 / 2) ^ 2 - (1 - q ^ 2 / 2) ^ 2 - (1 - r ^ 2 / 2) ^ 2 →
       0 ≤ lam * (q * r + p * r + p * q)
@@ -95,7 +99,7 @@ theorem tri_of_poly (L : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 - 
   have hu : u = 1 - p ^ 2 / 2 := by linarith
   have hv : v = 1 - q ^ 2 / 2 := by linarith
   have ht : t = 1 - r ^ 2 / 2 := by linarith
-  have lo : ∀ w : ℝ, w ≤ 5373 / 10000 → 24 / 25 ≤ Real.sqrt (2 - 2 * w) := fun w hw => by
+  have lo : ∀ w : ℝ, w ≤ 5373 / 10000 → 9619 / 10000 ≤ Real.sqrt (2 - 2 * w) := fun w hw => by
     rw [Real.le_sqrt (by norm_num) (by linarith)]; linarith
   have hi : ∀ w : ℝ, -1 ≤ w → Real.sqrt (2 - 2 * w) ≤ 2 := fun w hw => by
     rw [Real.sqrt_le_left (by norm_num)]; linarith
