@@ -36,7 +36,8 @@ proved about that certificate, the *Tasks*, and assembles them into `exists_thre
 
 The three tasks proved with `native_decide` (1a, 1b, 5b) are kept out of the default build: their
 libraries (`lake build Task1b`, about 2 minutes; `lake build Tri5b`, about an hour of CPU) import this
-file, and the axiom `Lean.ofReduceBool` they add should not leak into everything else.  So here
+file, and the axioms `native_decide` adds (one per certificate, `…._native.native_decide.ax_…`)
+should not leak into everything else.  So here
 they are *propositions* (`Task1a`, `Task1b`, `Task5b`), taken as hypotheses by every theorem that
 needs them, down to `thomson_eight_lower_of_tasks` (`Thomson.Main`).  The library `Complete`
 (`Thomson/Complete.lean`, `lake build Complete`) imports all three proofs and states the main
@@ -218,12 +219,18 @@ def Task5a : Prop := ∀ m : Fin 5, ∀ a b c : ℝ,
 /-- **Task 5a — local positivity at a touching type** (five instances).  **Open.**
 *Plan*: `plans/T5a-TriLocal.md`.
 *Sketch.*  By `triP_tight m`, the expansion of `triP pivots` about `τ_m` has no constant or linear
-term: `triP (τ_m + δ) = ½ δᵀ H_m δ + Σ_{|α| ≥ 3} c_α δ^α` (the coefficients are affine in `pivots`;
-the Taylor-shift machinery of `Thomson/Tri5b/` computes them as interval tensors).  Show
-`H_m ⪰ lamLocal m · I` at `pivotsNum` minus the `pivotEps` perturbation (Hessian eigenvalues in
-chord variables: smallest `9.3e−4, 2.0e−3, 9.3e−4, 6.4e−4, 8.4e−4` for types `0..4`), and bound
-`Σ_{|α| ≥ 3} |c_α| ρ^{|α|−3}` by `MLocal m`; then `local_nonneg_of_hessian` with
-`9 · MLocal m · rhoLocal ≤ lamLocal m`. -/
+term: `triP (τ_m + δ) = q_m(δ) + c_m(δ) + (higher)`, `q_m` quadratic, `c_m` cubic (the coefficients
+are affine in `pivots`; the Taylor-shift machinery of `Thomson/Tri5b/` computes them as interval
+tensors).  Smallest Hessian eigenvalues in chord variables: `3.9e−3, 2.0e−3, 9.3e−4, 6.4e−4, 8.4e−4`
+for types `0..4`.
+**Caution (numerics, `thompsoneight-fd`, 2026-09-11):** at `rhoLocal = 1/500` the *crude* bound
+`λ_min |δ|² ≥ Σ_{|α| ≥ 3} |c_α| |δ|^|α|` fails — it holds only to radius `≈ 5.0e−4, 5.6e−4, 2.7e−4,
+5.5e−4, 8.0e−4` — because the tail is `3–8×` the quadratic there.  A *directional* bound works:
+with `δ = r·e`, `‖e‖∞ = 1`, `0 < r ≤ ρ`,
+`triP (τ_m + r e) ≥ r² [q_m(e) − ρ |c_m(e)| − ρ² T_m(e)]` (`T_m` the absolute quartic-and-higher
+tail), and the bracket is `≥ 0.83·q_m(e)` on the whole cube surface for all five types; so cover
+the six faces of the cube by 2-D patches with interval enclosures of `q_m` and `c_m`.  (The
+radius must stay `1/500`: the covering of Task 5b excludes exactly these cubes.) -/
 theorem triP_local (h1a : Task1a) (h1b : Task1b) : Task5a := sorry
 
 /-- **Task 5b — global positivity away from the touching types**, on `[9619/10000, 2]³ ∩ {G ≥ 0}`

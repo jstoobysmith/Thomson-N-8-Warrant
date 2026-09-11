@@ -7,6 +7,14 @@ Read this file first, then the task file you are assigned.  Each task file is se
 statement, prerequisites, the exact Lean declarations to write, the proofs, the data to generate,
 and the acceptance test.*
 
+> **Status, 2026-09-11.**  Everything below is a *plan*; the live status is the table at the top of
+> `Thomson/ThreePoint/Tasks.lean`.  Done: 1a, 1b (library `Task1b`, `native_decide`), 1c(i) and
+> 1c(ii) (`Thomson/ThreePoint/{Slack,Kernel/*,Redundant}.lean`), 2 (`Thomson/PSD/`), 4
+> (`Thomson/Pair/`), 5b (library `Tri5b`, `native_decide`), and the statement fixes of §2.1–2.2
+> (chord bound `9619/10000`, `pivotEps = 10⁻¹²`).  §2.3 (per-type radii) was not needed: Task 5b uses
+> the uniform `rhoLocal = 1/500`.  Open: 5a.  The tasks proved by `native_decide` enter the default
+> build as hypotheses (`Task1a`, `Task1b`, `Task5b`); `Thomson/Complete.lean` discharges them.
+
 ## 0. What is open, and in which order to do it
 
 | leaf in `Tasks.lean` | plan file | needs | kind |

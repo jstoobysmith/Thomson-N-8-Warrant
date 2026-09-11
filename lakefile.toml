@@ -47,6 +47,13 @@ leanOptions = { autoImplicit = false }
 srcDir = "."
 globs = ["Thomson.PSD.+"]
 
+# Task 5a, numeric side (the patch covering and the enclosures): `decide +kernel` only.
+[[lean_lib]]
+name = "TriLocalCert"
+leanOptions = { autoImplicit = false }
+srcDir = "."
+globs = ["Thomson.TriLocalCert.+"]
+
 # The main theorem with Tasks 1a, 1b, 5b discharged (`Thomson.Complete`): builds `Task1b` and
 # `Tri5b`.  `lake build Complete`.
 [[lean_lib]]

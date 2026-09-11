@@ -8,10 +8,11 @@ theorem Thomson.Task1b.pivots_close_sharp : ∀ j, |pivots j - pivotsNum j| ≤ 
 ```
 
 Axioms: `propext`, `Classical.choice`, `Quot.sound`, and one `native_decide` (`Check.check_ok`,
-about 90 s).  `Tasks.lean` asks for `pivotEps = 10⁻⁶`; Task 5b needs `10⁻¹²`; the proof gives
-`2·10⁻²¹`.  The main library states both as `Thomson.Task1a`, `Thomson.Task1b`
-(`Thomson/ThreePoint/Task1b.lean`) and assumes them; `Thomson.Task1b.task1a`, `task1b` discharge
-them, and `Thomson.Tri5b.task5b_of_task5a` uses `task1b` so that Task 5b rests on Task 5a alone.
+about 90 s).  `Tasks.lean` asks for `pivotEps = 10⁻¹²` (what Tasks 4 and 5b need); the proof gives
+`2·10⁻²¹`.  The main library states both as propositions `Thomson.Task1a`, `Thomson.Task1b`
+(`Thomson/ThreePoint/Tasks.lean`) and takes them as hypotheses; `Thomson.Task1b.task1a`, `task1b`
+(`Thomson/Task1b/Tasks.lean`) discharge them, in `Thomson/Complete.lean` and in
+`Thomson.Tri5b.task5b_of_task5a`, so that Task 5b rests on Task 5a alone.
 
 ## The argument
 

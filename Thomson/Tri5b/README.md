@@ -105,7 +105,7 @@ it; the same statement is `decide +kernel`-checkable box by box (see below).
 the `Task1b` library (`Thomson/Task1b/`, to `2·10⁻²¹`), and `Task5b.lean` combines the two:
 
 ```lean
-theorem Thomson.Tri5b.task5b_of_task5a (hloc : TriLocal (fun _ => 1 / 500)) : Thomson.Task5b
+theorem Thomson.Tri5b.task5b_of_task5a (h5a : Thomson.Task5a) : Thomson.Task5b
 ```
 
 The covering, the certificate's data, the enclosures of `u*` and of the four touching chords are
