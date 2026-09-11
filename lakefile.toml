@@ -6,9 +6,32 @@ name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
 rev = "db584cd6d46c92f209a44c0f1c829460d327499d"
 
+# The main development.  The globs are listed rather than `Thomson.+` so that `Thomson.Tri5b.*`
+# — Task 5b, an hour of `native_decide` — is *not* part of the default build; it is the `Tri5b`
+# library below, built on demand.  A new file in `Thomson/ThreePoint/` is picked up by the last
+# glob; a new file directly in `Thomson/` has to be added here.
 [[lean_lib]]
 name = "Thomson"
 leanOptions = { autoImplicit = false }
+globs = ["Thomson", "Thomson.Antiprism", "Thomson.Basic", "Thomson.Cube", "Thomson.Derivative",
+         "Thomson.Enclosure", "Thomson.ForceBalance", "Thomson.Main", "Thomson.Reduction",
+         "Thomson.Separation", "Thomson.Yudin", "Thomson.ThreePoint.+"]
+
+# Task 5b: proved, but its certificate costs about an hour of `native_decide` spread over 107
+# modules, so it is kept out of `defaultTargets`.  `lake build Tri5b` checks it.
+[[lean_lib]]
+name = "Tri5b"
+leanOptions = { autoImplicit = false }
+srcDir = "."
+roots = ["Thomson.Tri5b.Task5b"]
+
+# Task 1b (and Task 1a, which its estimate proves on the way): also `native_decide`, also kept
+# out of the default build.
+[[lean_lib]]
+name = "Task1b"
+leanOptions = { autoImplicit = false }
+srcDir = "."
+roots = ["Thomson.Task1b.Eval"]
 
 [[lean_lib]]
 name = "Thomson8"

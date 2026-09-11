@@ -1,11 +1,18 @@
 import Thomson.ThreePoint.Linear
 import Thomson.ThreePoint.MinPoly
+import Thomson.ThreePoint.Perturb
+import Thomson.ThreePoint.Sharp
 
 namespace Thomson
 open Finset Matrix
 open scoped MatrixOrder
 
 /-! # THE OPEN TASKS
+
+**Proof plans for every leaf of this file are in `plans/` (read `plans/README.md` first).  Two of
+the statements below are to be edited before work starts: the chord lower bound `24 / 25` must
+become `9619 / 10000` (the certificate is not valid on `[0.96, 0.9619]`), and `pivotEps` becomes
+`10⁻¹²`; see `plans/README.md` §2.**
 
 Blueprint §12.  The Cohn–Woo-type three-point bound is numerically sharp for `N = 8`: restricted by
 the separation theorem of §15 to inner products `t ≤ 0.5373`, its value is `E(u*)` to seven digits,
@@ -52,13 +59,15 @@ noncomputable def pivotEps : ℝ := 1 / 10 ^ 6
 /-- **Task 1a — the pivot system is nonsingular.**
 *Sketch.*  Let `N` be the rational 24×24 matrix of `threepoint/task1_design.json` (`approx_inverse`,
 the double-precision inverse of the chord-form system).  Show `‖I − N * pivotMatrix‖∞ < 1` by
-interval arithmetic: each entry of `pivotMatrix` is `rowFun i (Pi.single j 1) − rowFun i 0`, i.e.
-(after `simp [rowFun, rowSpec, evalRow, pairP, triP, triD, Fh, Hp, eH, slot, Hfix, B, Bpoly, S3, Y3,
-Q3, Fin.sum_univ_succ]`) an explicit polynomial in `uStar, √2, rStar, s2Star, s4Star` — for the
-derivative rows first rewrite `deriv` of the explicit polynomial by `HasDerivAt.deriv` — and the
-enclosures `uStar_mem_Icc`, `sqrt2_bounds`, `rStar_bounds`, `s2Star_bounds`, `s4Star_bounds`
-(4–8 digits suffice here, the entries are `O(1)`–`O(10²)` and `‖N‖∞ ≈ 10⁴`, so `~10⁻⁵` accuracy per
-entry is needed: sharpen the enclosures once as in Task 1b).  Then `pivotMatrix *ᵥ x = 0` gives
+interval arithmetic.  The entries are already reduced to a single explicit quantity: by
+`pivotMatrix_bound_row`, `pivotMatrix_pairVal_row`, `pivotMatrix_pairDer_row`,
+`pivotMatrix_triVal_row`, `pivotMatrix_triD_row` (`Thomson.ThreePoint.Perturb`) every entry is a
+fixed multiple (or a `deriv`) of `Gh j u v t`, the `(a,b)` entry of `B_kᵀ S3_k(u,v,t) B_k` at the
+slot of pivot `j` — an explicit polynomial in `uStar, √2, rStar, s2Star, s4Star` with no reference to
+`Hfix`; for the derivative rows rewrite `deriv` by `HasDerivAt.deriv`.  The enclosures needed
+(`~10⁻⁵` per entry, since the entries are `O(1)`–`O(10²)` and `‖N‖∞ ≈ 10⁴`) are available in the
+sharp form of Task 1b: `sqrt2_bounds_sharp`, `uStar_mem_Icc_sharp`, `rStar_bounds_sharp`,
+`s2Star_bounds_sharp`, `s4Star_bounds_sharp`.  Then `pivotMatrix *ᵥ x = 0` gives
 `x = (I − N * pivotMatrix) *ᵥ x`, so `‖x‖∞ ≤ ‖I − N M‖∞ ‖x‖∞ < ‖x‖∞` unless `x = 0`; conclude with
 `Matrix.mulVec_injective_iff_isUnit` (or `Matrix.exists_mulVec_eq_zero_iff`). -/
 theorem pivotMatrix_det_isUnit : IsUnit pivotMatrix.det := sorry
@@ -69,10 +78,38 @@ theorem pivotMatrix_det_isUnit : IsUnit pivotMatrix.det := sorry
 `‖pivotMatrix⁻¹‖∞ ≤ ‖N‖∞/(1 − η)`.  The residual `pivotRhs − pivotMatrix *ᵥ pivotsNum` is an
 explicit expression (the rows evaluated at `pivotsNum`, `rowFun_eq_mulVec`); its true value is
 `≈ 10⁻²¹`, so the bound is limited only by the enclosures: `uStar` to `13` digits gives
-`‖residual‖∞ ≲ 10⁻¹⁰` and `‖pivots − pivotsNum‖∞ ≲ 10⁻⁶`.  Sharpen `uStar_mem_Icc` by the same
-argument as in `Thomson.Derivative` (sign of `antiprismEnergy'` at two 13-digit rationals; the
-value `u* = 0.3140893678892018651770997…`), then `rStar`, `s2Star`, `s4Star`, `√2` likewise. -/
+`‖residual‖∞ ≲ 10⁻¹⁰` and `‖pivots − pivotsNum‖∞ ≲ 10⁻⁶`.
+**The enclosures this needs are now proved**: `sqrt2_bounds_sharp` (28 digits),
+`uStar_mem_Icc_sharp` (13 digits, `u* = 0.3140893678892…`, `Thomson.Enclosure`) and
+`rStar_bounds_sharp`, `s2Star_bounds_sharp`, `s4Star_bounds_sharp` (25 digits,
+`Thomson.ThreePoint.Sharp`).  What remains is the residual estimate itself. -/
 theorem pivots_close : ∀ j, |pivots j - pivotsNum j| ≤ pivotEps := sorry
+
+/-! ### Consequences of Task 1b: the pivots may be replaced by `pivotsNum`
+
+Everything built from the certificate is affine in the pivots (`Thomson.ThreePoint.Linear`), so
+Task 1b bounds the error made by evaluating at the rational reference vector `pivotsNum` instead —
+by `pivotEps` times an explicit rational ℓ¹-norm (`Thomson.ThreePoint.Perturb`).  These are the
+estimates Tasks 2, 4 and 5 use; note that they may be applied only *after* the tangencies have been
+divided out (the cofactor `Q` of Task 4, the Hessian form of Task 5a), since at a touching point the
+polynomial itself vanishes and no uniform margin is available. -/
+
+/-- Task 2's perturbation `Δ_k`: entrywise, supported on the slots of block `k`. -/
+theorem certH_sub_pivotsNum_le (k : Fin 6) (a b : Fin (9 - (k : ℕ))) :
+    |certH k a b - Hp pivotsNum k a b| ≤ pivotEps * ∑ j, eH j (k : ℕ) (a : ℕ) (b : ℕ) :=
+  abs_Hp_sub_apply_le pivots_close k a b
+
+/-- Task 4's perturbation, at a fixed chord length. -/
+theorem pairP_sub_pivotsNum_le (s : ℝ) :
+    |pairP pivots s - pairP pivotsNum s|
+      ≤ pivotEps * ∑ j, |pairP (Pi.single j 1) s - pairP 0 s| :=
+  pairP_perturb pivots_close s
+
+/-- Task 5's perturbation, at a fixed chord triple. -/
+theorem triP_sub_pivotsNum_le (a b c : ℝ) :
+    |triP pivots a b c - triP pivotsNum a b c|
+      ≤ pivotEps * ∑ j, |triP (Pi.single j 1) a b c - triP 0 a b c| :=
+  triP_perturb pivots_close a b c
 
 /-- **Task 1c(i) — the dropped value row** (pair value at the chord `A = √2·r`).
 *Sketch.*  The slack identity at the antiprism `x(u) := antiprism √u` (blueprint §12.2; it is the

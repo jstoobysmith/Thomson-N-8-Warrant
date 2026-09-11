@@ -1178,6 +1178,16 @@ remains and that each piece is a finite, well-defined task.
 
 ### 12.7 Next session starts here
 
+**Update 2026-09-10 (evening): per-task proof plans are in [`plans/`](plans/).**  Start with
+[`plans/README.md`](plans/README.md): it records two facts that change the sketches below —
+(i) the chord lower bound `24/25` in `pair_of_poly`/`tri_of_poly`/`Tasks.lean` is outside the
+certificate's design range and `triP_global` is *false* as stated (`triP(1.6835, 0.96, 0.96) < 0`
+inside the Gram region); it must become `9619/10000`; (ii) all numerics go through one verified
+interval kernel (`plans/T0-Infrastructure.md`), in the Lean kernel for Tasks 1a, 1b, 2, 4, 5a and
+under `native_decide` for the box covering of 5b.  Task 1c is fully mechanical: the combinatorial
+kernel matrix has rank one along the whole family and `B_kᵀ A_k(u) B_k` is exactly divisible by
+`(u − u*)²` (`plans/check_kernel.py`).
+
 **Open `Thomson/ThreePoint/Tasks.lean`: it contains the eight open leaves, each with a proof
 sketch, and the header explains the implicit certificate.**  The standalone project builds:
 `lake build` → 8723 jobs, zero errors, eight `sorry`s (all in `Tasks.lean`).  Do **not** re-run the

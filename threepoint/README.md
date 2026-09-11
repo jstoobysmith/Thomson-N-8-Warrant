@@ -36,3 +36,15 @@ this folder and they run unchanged otherwise.
 | `task1_leanform.py` | the same system in the chord-variable form used by `Linear.lean` (cond `1.1e5`, `‖M‖∞ 132`, `‖N‖∞ 3.9e3`, `‖I−NM‖∞ 5e−12` with the 17-digit rational `approx_inverse` stored in `task1_design.json`; residual at `pivotsNum` `2e−21`) |
 | `task1_emit_lean.py` → `../Thomson/ThreePoint/CertData.lean` | renders the Lean data tables (`Bpoly`, `Hfix`, `slot`, `pivotsNum`) — regenerate after any change of design |
 | `task1_emit.py`, `task1_split2.py` | superseded (explicit LDLᵀ rendering; first split experiment) |
+
+## Task 5b (`Thomson/Tri5b/`, see its README)
+
+| file | purpose |
+|---|---|
+| `tri5b_leandata.py` | parses `Thomson/ThreePoint/CertData.lean` — `Bpoly`, `HfixTable`, `slot`, `pivotsNum` — so the prototype and Lean cannot drift apart |
+| `tri5b_eval.py` | the certificate itself: `Fh`, `triP`, `pairP`, `Gh`, the chords and touching types.  Validated against the certificate's own identities: the bound row to `3.6·10⁻¹⁵`, and exact double zeros of `pairP` at the four chords and of `triP` at the five types (`10⁻¹⁶`) |
+| `tri5b_tensor.py` | the `9×9×9` coefficient tensor of `F(u,v,t)` from `M_k = B_k H_k B_kᵀ` (425 nonzeros) |
+| `tri5b_boxes.py` | the branch and bound **in the exact form the Lean checker replays**: Taylor shift of the tensor, the rational tangent minorant of `λ/√(2−2u)`, an S-procedure multiplier on the boxes meeting `gram = 0`, and the axis-wise quadratic lower bound.  `run(maxdepth)` returns `(visited, leaves, unresolved)` |
+
+`tri5b_eval.triP(1.682, 0.96, 0.96) = −3.7·10⁻⁶` is the counterexample that refutes Task 5 on
+`[24/25, 2]³` (see `Thomson/Tri5b/README.md` and `plans/README.md` §2.1).
