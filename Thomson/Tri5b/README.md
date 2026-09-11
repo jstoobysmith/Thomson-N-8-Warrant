@@ -101,14 +101,16 @@ it; the same statement is `decide +kernel`-checkable box by box (see below).
 
 ## What remains
 
-Two hypotheses, both other people's tasks:
+**Only Task 5a** (`TriLocal`, the local cubes of radius `1/500`).  Task 1b at `10⁻¹²` is proved in
+the `Task1b` library (`Thomson/Task1b/`, to `2·10⁻²¹`), and `Task5b.lean` combines the two:
 
-* **Task 5a** (`TriLocal`), the local cubes of radius `1/500`;
-* **Task 1b at `10⁻¹²`** (`pivots_close` with `pivotEps = 10⁻¹²`, which is what
-  `plans/README.md` §2.2 already sets).
+```lean
+theorem Thomson.Tri5b.task5b_of_task5a (hloc : TriLocal (fun _ => 1 / 500)) : Thomson.Task5b
+```
 
-Nothing else: the covering, the certificate's data, the enclosures of `u*` and of the four touching
-chords are all here and proved.
+The covering, the certificate's data, the enclosures of `u*` and of the four touching chords are
+all here and proved.  Both libraries are outside `defaultTargets`: `lake build Tri5b`,
+`lake build Task1b`.
 
 ## Performance notes
 

@@ -53,33 +53,39 @@ noncomputable def evD3 (c : RT) (u v t : ℝ) : ℝ :=
 theorem hasDerivAt_evD1 (c : RT) (u v t : ℝ) :
     HasDerivAt (fun x => ev c x v t) (evD1 c u v t) u := by
   unfold ev evD1
-  refine HasDerivAt.sum fun i _ => HasDerivAt.sum fun q _ => HasDerivAt.sum fun r _ => ?_
+  refine HasDerivAt.fun_sum fun i _ => ?_
+  refine HasDerivAt.fun_sum fun q _ => ?_
+  refine HasDerivAt.fun_sum fun r _ => ?_
   have h1 : HasDerivAt (fun x : ℝ => x ^ (i : ℕ)) (((i : ℕ) : ℝ) * u ^ ((i : ℕ) - 1)) u :=
     hasDerivAt_pow _ _
   have h2 := (h1.mul_const (v ^ (q : ℕ))).mul_const (t ^ (r : ℕ))
   have h3 := h2.const_mul (c i q r)
   convert h3 using 1
-  ring
+  try ring
 
 theorem hasDerivAt_evD2 (c : RT) (u v t : ℝ) :
     HasDerivAt (fun y => ev c u y t) (evD2 c u v t) v := by
   unfold ev evD2
-  refine HasDerivAt.sum fun i _ => HasDerivAt.sum fun q _ => HasDerivAt.sum fun r _ => ?_
+  refine HasDerivAt.fun_sum fun i _ => ?_
+  refine HasDerivAt.fun_sum fun q _ => ?_
+  refine HasDerivAt.fun_sum fun r _ => ?_
   have h1 : HasDerivAt (fun y : ℝ => y ^ (q : ℕ)) (((q : ℕ) : ℝ) * v ^ ((q : ℕ) - 1)) v :=
     hasDerivAt_pow _ _
   have h2 := ((h1.const_mul (u ^ (i : ℕ))).mul_const (t ^ (r : ℕ))).const_mul (c i q r)
   convert h2 using 1
-  ring
+  try ring
 
 theorem hasDerivAt_evD3 (c : RT) (u v t : ℝ) :
     HasDerivAt (fun z => ev c u v z) (evD3 c u v t) t := by
   unfold ev evD3
-  refine HasDerivAt.sum fun i _ => HasDerivAt.sum fun q _ => HasDerivAt.sum fun r _ => ?_
+  refine HasDerivAt.fun_sum fun i _ => ?_
+  refine HasDerivAt.fun_sum fun q _ => ?_
+  refine HasDerivAt.fun_sum fun r _ => ?_
   have h1 : HasDerivAt (fun z : ℝ => z ^ (r : ℕ)) (((r : ℕ) : ℝ) * t ^ ((r : ℕ) - 1)) t :=
     hasDerivAt_pow _ _
   have h2 := (h1.const_mul (u ^ (i : ℕ) * v ^ (q : ℕ))).const_mul (c i q r)
   convert h2 using 1
-  ring
+  try ring
 
 /-! ### and their interval versions -/
 

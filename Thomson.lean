@@ -18,4 +18,5 @@ import Thomson.ThreePoint.Perturb
 import Thomson.ThreePoint.Tasks
 import Thomson.Main
 import Thomson.ThreePoint.Task1a
+import Thomson.ThreePoint.Task1b
 import Thomson.ThreePoint.Task5b

@@ -17,8 +17,9 @@ Two things differ from the `triP_global` of `Tasks.lean`.
   and the `tri` field of `exists_threePointCert` need the constant changed to match.
 * **Task 1b is needed at `10⁻¹²`, not `10⁻⁶`.**  Just outside a `rhoLocal`-cube `triP` is only
   `≈ ½·λ_min·(1/500)² ≈ 1.2·10⁻⁹`, while `pivotEps = 10⁻⁶` permits a perturbation of
-  `10⁻⁶·Σⱼ|Gⱼ| ≈ 1.1·10⁻⁵`: no proof of Task 5b can use Task 1b as currently stated.  The residual
-  at `pivotsNum` is `≈ 10⁻²¹`, so this is a matter of digits, not of a new estimate. -/
+  `10⁻⁶·Σⱼ|Gⱼ| ≈ 1.1·10⁻⁵`: no proof of Task 5b can use Task 1b as currently stated.  Task 1b is
+  now proved to `2·10⁻²¹` (`Thomson/ThreePoint/Task1b.lean`, the `Task1b` library), and
+  `Thomson.Tri5b.task5b_of_task5a` gives Task 5b from Task 5a alone. -/
 
 namespace Thomson
 

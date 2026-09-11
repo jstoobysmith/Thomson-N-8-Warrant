@@ -31,7 +31,14 @@ roots = ["Thomson.Tri5b.Task5b"]
 name = "Task1b"
 leanOptions = { autoImplicit = false }
 srcDir = "."
-roots = ["Thomson.Task1b.Eval"]
+roots = ["Thomson.Task1b.Tasks"]
+
+# Task 4 (the pair inequality): `decide +kernel` only, no `native_decide`.  `lake build Pair`.
+[[lean_lib]]
+name = "Pair"
+leanOptions = { autoImplicit = false }
+srcDir = "."
+globs = ["Thomson.Pair.+"]
 
 [[lean_lib]]
 name = "Thomson8"

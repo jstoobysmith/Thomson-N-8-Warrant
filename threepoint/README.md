@@ -45,6 +45,16 @@ this folder and they run unchanged otherwise.
 | `tri5b_eval.py` | the certificate itself: `Fh`, `triP`, `pairP`, `Gh`, the chords and touching types.  Validated against the certificate's own identities: the bound row to `3.6·10⁻¹⁵`, and exact double zeros of `pairP` at the four chords and of `triP` at the five types (`10⁻¹⁶`) |
 | `tri5b_tensor.py` | the `9×9×9` coefficient tensor of `F(u,v,t)` from `M_k = B_k H_k B_kᵀ` (425 nonzeros) |
 | `tri5b_boxes.py` | the branch and bound **in the exact form the Lean checker replays**: Taylor shift of the tensor, the rational tangent minorant of `λ/√(2−2u)`, an S-procedure multiplier on the boxes meeting `gram = 0`, and the axis-wise quadratic lower bound.  `run(maxdepth)` returns `(visited, leaves, unresolved)` |
+| `tri5b_mirror.py` | bit-for-bit Python copy of the Lean fixed-point interval arithmetic (`Itv`, the Taylor shift, `toTM`, `loBound`) |
+| `tri5b_build.py`, `tri5b_cubes.py` | the tensor of `F` from `CertData.lean`; the fixed-point images of the five local cubes |
+| `tri5b_tree.py` | **superseded**: searched with a float model at safety factor 2, which misses the `10⁻¹²` pivot widening — the first leaf of its tree fails the exact test |
+| `tri5b_tree2.py` → `tri5b_tree2.pkl` | **the covering**: the float model only proposes the S-procedure multiplier, `leaf_exact` (the mirror of `leafCheck`) decides; 59 347 nodes, 28 098 checked boxes, six minutes on eleven cores |
+| `tri5b_parts.py` | cuts the tree into 107 pieces (`≤ 891` boxes each) and writes `Thomson/Tri5b/{Params,Part000–106,Certificate}.lean`, so that `lake` checks them in parallel |
+
+**`approx_inverse` does not invert `pivotMatrix` as it stands.**  `task1_leanform.py` builds the
+bound row as half of `28a₀ − 4a₁ − 4F − E`, but `evalRow .bound` *is* `28a₀ − 4a₁ − 4F − E`
+(`(64a₀ − 8(a₀+a₁) − 8F)/2`); so `approx_inverse · pivotMatrix = diag(2, 1, …, 1)` and its first
+column must be halved.  The Task 1b proof (`Thomson/Task1b/`) does this; the pivots are unaffected.
 
 `tri5b_eval.triP(1.682, 0.96, 0.96) = −3.7·10⁻⁶` is the counterexample that refutes Task 5 on
 `[24/25, 2]³` (see `Thomson/Tri5b/README.md` and `plans/README.md` §2.1).
