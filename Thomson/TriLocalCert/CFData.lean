@@ -97,6 +97,7 @@ def CFtab3 : List (List (List Itv)) :=
 
 def CFt : IT := fun i j k => ((CFtab3.getD i []).getD j []).getD k Itv.zero
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 100000 in
 theorem CFt_eq : ∀ i j k, CFt i j k = CFedata i j k := by decide +kernel
 

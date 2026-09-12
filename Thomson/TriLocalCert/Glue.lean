@@ -52,9 +52,20 @@ def trees0 : Fin 3 → Bool → QT
   | 2, true => tree0_2p
   | 2, false => tree0_2n
 
-theorem typeCert0 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
+set_option maxHeartbeats 0 in
+def typeCert0 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
   type_certificate hclose 0 CS0_eq D0_eq (by decide) trees0
-    (fun f σ => by fin_cases f <;> cases σ <;> first | exact face0_0p | exact face0_0n | exact face0_1p | exact face0_1n | exact face0_2p | exact face0_2n)
+    (fun f σ => by
+      fin_cases f
+      · cases σ
+        · exact face0_0n
+        · exact face0_0p
+      · cases σ
+        · exact face0_1n
+        · exact face0_1p
+      · cases σ
+        · exact face0_2n
+        · exact face0_2p)
 
 def trees1 : Fin 3 → Bool → QT
   | 0, true => tree1_0p
@@ -64,9 +75,20 @@ def trees1 : Fin 3 → Bool → QT
   | 2, true => tree1_2p
   | 2, false => tree1_2n
 
-theorem typeCert1 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
+set_option maxHeartbeats 0 in
+def typeCert1 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
   type_certificate hclose 1 CS1_eq D1_eq (by decide) trees1
-    (fun f σ => by fin_cases f <;> cases σ <;> first | exact face1_0p | exact face1_0n | exact face1_1p | exact face1_1n | exact face1_2p | exact face1_2n)
+    (fun f σ => by
+      fin_cases f
+      · cases σ
+        · exact face1_0n
+        · exact face1_0p
+      · cases σ
+        · exact face1_1n
+        · exact face1_1p
+      · cases σ
+        · exact face1_2n
+        · exact face1_2p)
 
 def trees2 : Fin 3 → Bool → QT
   | 0, true => tree2_0p
@@ -76,9 +98,20 @@ def trees2 : Fin 3 → Bool → QT
   | 2, true => tree2_2p
   | 2, false => tree2_2n
 
-theorem typeCert2 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
+set_option maxHeartbeats 0 in
+def typeCert2 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
   type_certificate hclose 2 CS2_eq D2_eq (by decide) trees2
-    (fun f σ => by fin_cases f <;> cases σ <;> first | exact face2_0p | exact face2_0n | exact face2_1p | exact face2_1n | exact face2_2p | exact face2_2n)
+    (fun f σ => by
+      fin_cases f
+      · cases σ
+        · exact face2_0n
+        · exact face2_0p
+      · cases σ
+        · exact face2_1n
+        · exact face2_1p
+      · cases σ
+        · exact face2_2n
+        · exact face2_2p)
 
 def trees3 : Fin 3 → Bool → QT
   | 0, true => tree3_0p
@@ -88,9 +121,20 @@ def trees3 : Fin 3 → Bool → QT
   | 2, true => tree3_2p
   | 2, false => tree3_2n
 
-theorem typeCert3 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
+set_option maxHeartbeats 0 in
+def typeCert3 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
   type_certificate hclose 3 CS3_eq D3_eq (by decide) trees3
-    (fun f σ => by fin_cases f <;> cases σ <;> first | exact face3_0p | exact face3_0n | exact face3_1p | exact face3_1n | exact face3_2p | exact face3_2n)
+    (fun f σ => by
+      fin_cases f
+      · cases σ
+        · exact face3_0n
+        · exact face3_0p
+      · cases σ
+        · exact face3_1n
+        · exact face3_1p
+      · cases σ
+        · exact face3_2n
+        · exact face3_2p)
 
 def trees4 : Fin 3 → Bool → QT
   | 0, true => tree4_0p
@@ -100,9 +144,20 @@ def trees4 : Fin 3 → Bool → QT
   | 2, true => tree4_2p
   | 2, false => tree4_2n
 
-theorem typeCert4 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
+set_option maxHeartbeats 0 in
+def typeCert4 {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
   type_certificate hclose 4 CS4_eq D4_eq (by decide) trees4
-    (fun f σ => by fin_cases f <;> cases σ <;> first | exact face4_0p | exact face4_0n | exact face4_1p | exact face4_1n | exact face4_2p | exact face4_2n)
+    (fun f σ => by
+      fin_cases f
+      · cases σ
+        · exact face4_0n
+        · exact face4_0p
+      · cases σ
+        · exact face4_1n
+        · exact face4_1p
+      · cases σ
+        · exact face4_2n
+        · exact face4_2p)
 
 
 /-- The `M` of each type. -/
@@ -113,6 +168,7 @@ noncomputable def Mt : Fin 5 → ℝ
   | 3 => Mreal CS3 (Tt 3).1 (Tt 3).2.1 (Tt 3).2.2 sa3 sb3 sc3
   | 4 => Mreal CS4 (Tt 4).1 (Tt 4).2.1 (Tt 4).2.2 sa4 sb4 sc4
 
+set_option maxHeartbeats 0 in
 /-- **Task 5a.** -/
 theorem triP_local_cert {p : Fin 24 → ℝ} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12)
     (hval : ∀ m : Fin 5, triP p (touchType m).1 (touchType m).2.1 (touchType m).2.2 = 0)

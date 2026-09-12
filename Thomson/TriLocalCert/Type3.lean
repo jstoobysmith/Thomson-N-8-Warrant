@@ -103,6 +103,7 @@ def CS3tab : List (List (List Itv)) :=
 
 def CS3 : IT := fun i j k => ((CS3tab.getD i []).getD j []).getD k Itv.zero
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 100000 in
 theorem CS3_eq : ∀ i j k, CS3 i j k = Ishift CFt sa3 sb3 sc3 i j k := by decide +kernel
 
@@ -122,6 +123,7 @@ def D3 : Data where
     [⟨-2111154717202201476683342966055609128110, -2111154497276254555516195977471488994563⟩, ⟨1073691970653399205683813762427965988364, 1073692078608863451058547244094877066096⟩, ⟨2010723932680003293072799614744708534186, 2010723973541809932435578420034373939176⟩]]]
   M := ⟨1825068658784247821918853726372068050550086, 1825068658784247821918853726372068050861406⟩
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 100000 in
 theorem D3_eq : D3 = computeD CFt CS3 (Tt 3).1 (Tt 3).2.1 (Tt 3).2.2 sa3 sb3 sc3 := by
   decide +kernel

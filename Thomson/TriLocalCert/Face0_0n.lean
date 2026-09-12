@@ -8,6 +8,7 @@ namespace Thomson.TriLocalCert
 set_option maxHeartbeats 4000000 in
 def tree0_0n : QT := (.node .leaf (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf))
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in
 theorem face0_0n : faceOK D0 0 false tree0_0n = true := by decide +kernel
 

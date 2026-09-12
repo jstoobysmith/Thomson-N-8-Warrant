@@ -40,4 +40,22 @@ theorem triP_global (hloc : TriLocal (fun _ => 1 / 500))
       0 ≤ triP pivots a b c :=
   fun a b c h1 h2 h3 h4 h5 h6 hg _ => tri_nonneg hloc hclose a b c h1 h2 h3 h4 h5 h6 hg
 
+/-- **The covering's margin, exported** (uniqueness, `UniquenessPlan.md` U4): on the sorted region
+outside the five `1/500`-cubes the slack is at least `MG / SCALE = 10⁻¹⁰`.  This is the `hnum` of
+`task5_of_data`, for the data of `tri_nonneg`. -/
+theorem numCertU_final (hclose : ∀ j, |pivots j - pivotsNum j| ≤ 1 / 10 ^ 12) :
+    NumCertU (fun _ => 1 / 500) (1 / 10 ^ 10) := by
+  have hc : ∀ j, |pivots j - pivotsNum j| ≤ (EPS : ℝ) / SCALE := by
+    intro j
+    have h := hclose j
+    have e : (EPS : ℝ) / SCALE = 1 / 10 ^ 12 := by
+      unfold EPS SCALE; norm_num
+    rwa [e]
+  have h := numCertU_of_covers (ev_cF_eq_Fh pivots) rootBx
+    (cert_cover (ITMem_CFtab hc) cubeSound) (le_refl _) (le_refl _) (le_refl _) (le_refl _)
+    (le_refl _) (le_refl _)
+  have e : (MG : ℝ) / SCALE = 1 / 10 ^ 10 := by
+    unfold MG SCALE; norm_num
+  rwa [e] at h
+
 end Thomson.Tri5b

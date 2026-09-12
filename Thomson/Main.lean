@@ -32,7 +32,8 @@ theorem thomson_eight_lower_of_cert (C : ThreePointCert) :
 from `exists_threePointCert_of_tasks`, i.e. from the Tasks of `Thomson.ThreePoint.Tasks`.  The three
 hypotheses are the tasks proved with `native_decide` in the separate libraries `Task1b` (1a, 1b) and
 `Tri5b` (5b); `Thomson.Complete` (library `Complete`) discharges them and states
-`thomson_eight_lower` outright.  The one open task, 5a, enters as the `sorry` of `Tasks.lean`. -/
+`thomson_eight_lower` outright.  Task 5a is proved in `Thomson/TriLocalCert/` and is imported by
+`Tasks.lean`, so this theorem is `sorry`-free and free of `native_decide`. -/
 theorem thomson_eight_lower_of_tasks (h1a : Task1a) (h1b : Task1b) (h5b : Task5b) :
     antiprismEnergy uStar ≤ thomsonInf 8 :=
   thomson_eight_lower_of_cert (Classical.choice (exists_threePointCert_of_tasks h1a h1b h5b))

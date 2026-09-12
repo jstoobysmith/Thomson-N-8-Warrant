@@ -5,6 +5,8 @@
 #
 #   python3 plans/unique_enum.py          full search:      224 922 nodes, 5040 leaves
 #   python3 plans/unique_enum.py sorted   vertex-0 sorted:    1 878 nodes,    8 leaves
+#   python3 plans/unique_enum.py sorted lean   also print the leaf witnesses stored in
+#                                         `Thomson/Unique/Graph.lean` (`apWits`, `alWits`)
 #
 # Every leaf is either a relabelling of the antiprism pattern (`canon` finds the relabelling) or
 # contains an "aligned" quadruple i j k l with ij = kl = A and ik = il = jk = jl = N — the pattern
@@ -79,3 +81,20 @@ degs = {tuple(sum(1 for k in range(8) if k != v and c[(min(v, k), max(v, k))] ==
 print(f"nodes {nodes}, leaves {len(leaves)}: antiprism relabellings {n_ap}, "
       f"aligned {n_al}, unexplained {n_bad}; vertex degree patterns (A,D,N,F) = {degs}")
 assert n_bad == 0
+
+if len(sys.argv) > 2 and sys.argv[2] == 'lean':
+    # Witnesses for `leafL` in `Thomson/Unique/Graph.lean`: a relabelling sigma (as the list
+    # [sigma 0, ..., sigma 7]) or an aligned quadruple, for every leaf.
+    sig, quads = [], []
+    for c in leaves:
+        cc = lambda i, j: c[(min(i, j), max(i, j))]
+        s = canon(c)
+        if s is not None:
+            if s not in sig: sig.append(s)
+        else:
+            q = next(t for t in itertools.permutations(range(8), 4)
+                     if cc(t[0], t[1]) == A and cc(t[2], t[3]) == A and cc(t[0], t[2]) == N
+                     and cc(t[0], t[3]) == N and cc(t[1], t[2]) == N and cc(t[1], t[3]) == N)
+            if q not in quads: quads.append(q)
+    print("apWits (as lists):", sig)
+    print("alWits:", quads)

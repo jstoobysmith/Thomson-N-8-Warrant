@@ -8,6 +8,7 @@ namespace Thomson.TriLocalCert
 set_option maxHeartbeats 4000000 in
 def tree4_2p : QT := (.node (.node (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf)) (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) .leaf) (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) .leaf) (.node .leaf .leaf .leaf .leaf)) (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) .leaf .leaf) (.node (.node .leaf .leaf .leaf .leaf) .leaf (.node .leaf .leaf .leaf .leaf) .leaf) .leaf)
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in
 theorem face4_2p : faceOK D4 2 true tree4_2p = true := by decide +kernel
 

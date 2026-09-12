@@ -8,6 +8,7 @@ namespace Thomson.TriLocalCert
 set_option maxHeartbeats 4000000 in
 def tree2_2n : QT := (.node (.node (.node (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf)) (.node (.node .leaf .leaf .leaf .leaf) .leaf (.node .leaf .leaf .leaf .leaf) .leaf) (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf)) (.node (.node .leaf .leaf .leaf .leaf) .leaf .leaf .leaf)) (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) .leaf) (.node (.node (.node .leaf .leaf .leaf .leaf) .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) .leaf) (.node .leaf .leaf .leaf .leaf)) (.node (.node .leaf .leaf .leaf .leaf) (.node .leaf .leaf .leaf .leaf) .leaf .leaf) (.node (.node .leaf .leaf .leaf .leaf) .leaf .leaf .leaf) .leaf)
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in
 theorem face2_2n : faceOK D2 2 false tree2_2n = true := by decide +kernel
 

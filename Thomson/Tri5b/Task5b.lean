@@ -1,5 +1,6 @@
 import Thomson.Tri5b.Final
 import Thomson.Task1b.Tasks
+import Thomson.Unique.Chords
 
 /-! # Task 5b, in the form `Thomson.ThreePoint.Tasks` states it
 
@@ -23,5 +24,9 @@ theorem triLocal_of_task5a (h : Thomson.Task5a) : TriLocal (fun _ => 1 / 500) :=
 /-- **Task 5b from Task 5a alone**: Task 1b is proved (`Thomson.Task1b.task1b`). -/
 theorem task5b_of_task5a (h5a : Thomson.Task5a) : Thomson.Task5b :=
   task5b (triLocal_of_task5a h5a) Thomson.Task1b.task1b
+
+/-- **Task 5b with its margin** (uniqueness, `UniquenessPlan.md` U4): the covering's slack is
+`≥ 10⁻¹⁰` outside the five cubes.  From Task 1b alone. -/
+theorem task5bStrict : Thomson.Unique.Task5bStrict := numCertU_final Thomson.Task1b.task1b
 
 end Thomson.Tri5b

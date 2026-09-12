@@ -103,6 +103,7 @@ def CS4tab : List (List (List Itv)) :=
 
 def CS4 : IT := fun i j k => ((CS4tab.getD i []).getD j []).getD k Itv.zero
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 100000 in
 theorem CS4_eq : ∀ i j k, CS4 i j k = Ishift CFt sa4 sb4 sc4 i j k := by decide +kernel
 
@@ -122,6 +123,7 @@ def D4 : Data where
     [⟨1197892038827838030043138892724795793135, 1197892077357801496675129640661408372359⟩, ⟨1197892038667716160917658171741318510399, 1197892077517923365800610361644885655155⟩, ⟨-5969700521283790127949388989472726626678, -5969700507449052742304613043658396108646⟩]]]
   M := ⟨1122916612916327136279715823626941209786544, 1122916612916327136279715823626941209922660⟩
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 100000 in
 theorem D4_eq : D4 = computeD CFt CS4 (Tt 4).1 (Tt 4).2.1 (Tt 4).2.2 sa4 sb4 sc4 := by
   decide +kernel

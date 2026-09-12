@@ -241,6 +241,7 @@ def CS{m}tab : List (List (List Itv)) :=
 
 def CS{m} : IT := fun i j k => ((CS{m}tab.getD i []).getD j []).getD k Itv.zero
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 100000 in
 theorem CS{m}_eq : ∀ i j k, CS{m} i j k = Ishift CFt sa{m} sb{m} sc{m} i j k := by decide +kernel
 
@@ -250,6 +251,7 @@ def D{m} : Data where
   C := {C}
   M := {MI}
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 100000 in
 theorem D{m}_eq : D{m} = computeD CFt CS{m} (Tt {m}).1 (Tt {m}).2.1 (Tt {m}).2.2 sa{m} sb{m} sc{m} := by
   decide +kernel
@@ -266,6 +268,7 @@ namespace Thomson.TriLocalCert
 set_option maxHeartbeats 4000000 in
 def tree{m}_{f}{s} : QT := {tree}
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in
 theorem face{m}_{f}{s} : faceOK D{m} {f} {bool} tree{m}_{f}{s} = true := by decide +kernel
 
@@ -294,6 +297,7 @@ open Thomson Thomson.Tri5b Set
 noncomputable def Mt : Fin 5 → ℝ
 {mdefs}
 
+set_option maxHeartbeats 0 in
 /-- **Task 5a.** -/
 theorem triP_local_cert {{p : Fin 24 → ℝ}} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12)
     (hval : ∀ m : Fin 5, triP p (touchType m).1 (touchType m).2.1 (touchType m).2.2 = 0)
@@ -340,6 +344,7 @@ def CFtab3 : List (List (List Itv)) :=
 
 def CFt : IT := fun i j k => ((CFtab3.getD i []).getD j []).getD k Itv.zero
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 100000 in
 theorem CFt_eq : ∀ i j k, CFt i j k = CFedata i j k := by decide +kernel
 
@@ -376,13 +381,20 @@ def emit(outdir):
                                 tree=qterm(t), bool="true" if sg else "false"))
         tm = "\n".join("  | %d, %s => tree%d_%d%s" % (f, "true" if sg else "false", m, f, "p" if sg else "n")
                        for f in range(3) for sg in (True, False))
-        faces = " | ".join("exact face%d_%d%s" % (m, f, s2) for f in range(3) for s2 in ("p", "n"))
+        # Explicit per-case bullets: a `first | exact ...` alternation makes the elaborator try
+        # the wrong face certificates first, each forcing a definitional comparison of very large
+        # patch trees (hours for one type instead of seconds).
+        faces = "\n".join("      \u00b7 cases \u03c3\n        \u00b7 exact face%d_%dn\n        \u00b7 exact face%d_%dp"
+                          % (m, f, m, f) for f in range(3))
         glue_types.append(f"""def trees{m} : Fin 3 → Bool → QT
 {tm}
 
-theorem typeCert{m} {{p : Fin 24 → ℝ}} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
+set_option maxHeartbeats 0 in
+def typeCert{m} {{p : Fin 24 → ℝ}} (hclose : ∀ j, |p j - pivotsNum j| ≤ 1 / 10 ^ 12) :=
   type_certificate hclose {m} CS{m}_eq D{m}_eq (by decide) trees{m}
-    (fun f σ => by fin_cases f <;> cases σ <;> first | {faces})
+    (fun f σ => by
+      fin_cases f
+{faces})
 """)
         glue_m.append("  | %d => Mreal CS%d (Tt %d).1 (Tt %d).2.1 (Tt %d).2.2 sa%d sb%d sc%d" % (m, m, m, m, m, m, m, m))
         glue_cases.append("    · exact typeCert%d hclose" % m)

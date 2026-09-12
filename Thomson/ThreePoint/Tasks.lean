@@ -5,6 +5,7 @@ import Thomson.ThreePoint.Sharp
 import Thomson.Pair.Main
 import Thomson.PSD.Main
 import Thomson.ThreePoint.Redundant
+import Thomson.TriLocalCert.Glue
 
 namespace Thomson
 open Finset Matrix
@@ -28,11 +29,12 @@ proved about that certificate, the *Tasks*, and assembles them into `exists_thre
 | 2 | `certH_posSemidef` | **proved** from 1b (`decide +kernel`) | `Thomson/PSD/`, `Thomson.PSD.hp_posSemidef` |
 | 3 | `certData_bound_eq` | **proved** (a definitional row) | below |
 | 4 | `pairP_nonneg` | **proved** from 1a, 1b, 1c(i) (`decide +kernel`) | `Thomson/Pair/`, `Thomson.Pair.pairP_nonneg_of` |
-| 5a | `triP_local : Task5a` | **open** — `sorry` | below |
+| 5a | `triP_local : Task5a` | **proved** from 1a, 1b (`decide +kernel`) | `TriLocalCert` library: `Thomson.TriLocalCert.triP_local_cert` |
 | 5b | `Task5b` | **proved** from 1b, 5a (`native_decide`) | `Tri5b` library: `Thomson.Tri5b.task5b_of_task5a` |
 | 6 | `side_conditions` | **proved** | below |
 
-**The only `sorry` of this file — and of the default build — is Task 5a (`triP_local`).**
+**This file, and the whole default build, is `sorry`-free.**  Task 5a is proved by the certificate
+of `Thomson/TriLocalCert/` (`decide +kernel` only), imported above.
 
 The three tasks proved with `native_decide` (1a, 1b, 5b) are kept out of the default build: their
 libraries (`lake build Task1b`, about 2 minutes; `lake build Tri5b`, about an hour of CPU) import this
@@ -41,7 +43,7 @@ should not leak into everything else.  So here
 they are *propositions* (`Task1a`, `Task1b`, `Task5b`), taken as hypotheses by every theorem that
 needs them, down to `thomson_eight_lower_of_tasks` (`Thomson.Main`).  The library `Complete`
 (`Thomson/Complete.lean`, `lake build Complete`) imports all three proofs and states the main
-theorem outright; its only `sorry` is Task 5a.
+theorem outright.
 
 ## The constants (all final)
 
@@ -216,7 +218,9 @@ def Task5a : Prop := ∀ m : Fin 5, ∀ a b c : ℝ,
     |a - (touchType m).1| ≤ rhoLocal → |b - (touchType m).2.1| ≤ rhoLocal →
     |c - (touchType m).2.2| ≤ rhoLocal → 0 ≤ triP pivots a b c
 
-/-- **Task 5a — local positivity at a touching type** (five instances).  **Open.**
+/-- **Task 5a — local positivity at a touching type** (five instances).  **Proved** in the
+`TriLocalCert` library (`Thomson.TriLocalCert.triP_local_cert`; `decide +kernel` only, no
+`native_decide`), from the second-order zeros `triP_tight` (Tasks 1a, 1c) and Task 1b.
 *Plan*: `plans/T5a-TriLocal.md`.
 *Sketch.*  By `triP_tight m`, the expansion of `triP pivots` about `τ_m` has no constant or linear
 term: `triP (τ_m + δ) = q_m(δ) + c_m(δ) + (higher)`, `q_m` quadratic, `c_m` cubic (the coefficients
@@ -231,7 +235,12 @@ with `δ = r·e`, `‖e‖∞ = 1`, `0 < r ≤ ρ`,
 tail), and the bracket is `≥ 0.83·q_m(e)` on the whole cube surface for all five types; so cover
 the six faces of the cube by 2-D patches with interval enclosures of `q_m` and `c_m`.  (The
 radius must stay `1/500`: the covering of Task 5b excludes exactly these cubes.) -/
-theorem triP_local (h1a : Task1a) (h1b : Task1b) : Task5a := sorry
+theorem triP_local (h1a : Task1a) (h1b : Task1b) : Task5a := by
+  intro m a b c ha hb hc
+  have e : rhoLocal = 1 / 500 := rfl
+  rw [e] at ha hb hc
+  exact TriLocalCert.triP_local_cert (p := pivots) (fun j => by simpa [pivotEps] using h1b j)
+    (fun m => (triP_tight h1a m).1) (fun m c => (triP_tight h1a m).2 c) m a b c ha hb hc
 
 /-- **Task 5b — global positivity away from the touching types**, on `[9619/10000, 2]³ ∩ {G ≥ 0}`
 outside the five `rhoLocal`-cubes.  **Proved** in the `Tri5b` library
@@ -282,8 +291,7 @@ theorem Fsum_certH (A : (k : Fin 6) → Matrix (Fin (9 - (k : ℕ))) (Fin (9 - (
   rw [Fsum_eq_Fh]; congr 1; funext k; exact (hA k).symm
 
 /-- **The certificate exists**, assembled from the Tasks.  The hypotheses are the three tasks
-proved outside the default build (`Complete.lean` discharges them); the one open task, 5a, enters
-through its `sorry`. -/
+proved outside the default build with `native_decide` (`Complete.lean` discharges them). -/
 theorem exists_threePointCert_of_tasks (h1a : Task1a) (h1b : Task1b) (h5b : Task5b) :
     Nonempty ThreePointCert := by
   choose A hA using certH_factor h1b

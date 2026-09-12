@@ -15,7 +15,8 @@ name = "Thomson"
 leanOptions = { autoImplicit = false }
 globs = ["Thomson", "Thomson.Antiprism", "Thomson.Basic", "Thomson.Cube", "Thomson.Derivative",
          "Thomson.Enclosure", "Thomson.ForceBalance", "Thomson.Main", "Thomson.Reduction",
-         "Thomson.Separation", "Thomson.Yudin", "Thomson.ThreePoint.+"]
+         "Thomson.Separation", "Thomson.Yudin", "Thomson.ThreePoint.+",
+         "Thomson.Unique.+"]
 
 # Task 5b: proved, but its certificate costs about an hour of `native_decide` spread over 107
 # modules, so it is kept out of `defaultTargets`.  `lake build Tri5b` checks it.

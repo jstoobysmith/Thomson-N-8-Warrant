@@ -103,6 +103,7 @@ def CS2tab : List (List (List Itv)) :=
 
 def CS2 : IT := fun i j k => ((CS2tab.getD i []).getD j []).getD k Itv.zero
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 100000 in
 theorem CS2_eq : ∀ i j k, CS2 i j k = Ishift CFt sa2 sb2 sc2 i j k := by decide +kernel
 
@@ -122,6 +123,7 @@ def D2 : Data where
     [⟨4246147632602596974545336595615550521797, 4246148495363841852562547109185889949826⟩, ⟨2601632038581435911404988149155958464063, 2601632444962488893205337877216107484232⟩, ⟨-5680997726192795138851451666850256141854, -5680997610905221910091621746290702274262⟩]]]
   M := ⟨9935758287045578044014183571775564501390805, 9935758287045578044014183571775564504115564⟩
 
+set_option maxHeartbeats 0 in
 set_option maxRecDepth 100000 in
 theorem D2_eq : D2 = computeD CFt CS2 (Tt 2).1 (Tt 2).2.1 (Tt 2).2.2 sa2 sb2 sc2 := by
   decide +kernel
