@@ -1,4 +1,4 @@
-import Thomson.Tri5b.CertIntervals
+import Thomson.TriangleGlobal.CertIntervals
 import Thomson.PSD.Dom
 
 /-! # Task 2, step 2: the check of one block

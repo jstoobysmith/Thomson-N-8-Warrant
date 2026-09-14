@@ -6,57 +6,56 @@ name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
 rev = "db584cd6d46c92f209a44c0f1c829460d327499d"
 
-# The main development.  The globs are listed rather than `Thomson.+` so that `Thomson.Tri5b.*`
-# — Task 5b, an hour of `native_decide` — is *not* part of the default build; it is the `Tri5b`
-# library below, built on demand.  A new file in `Thomson/ThreePoint/` is picked up by the last
-# glob; a new file directly in `Thomson/` has to be added here.
+# The main development, in reading order (`organisation.md`): the problem, the antiprism, the LP
+# bounds, the three-point bound, the certificate, the shared numerics, uniqueness, `Main`.  The
+# expensive kernel-checked certificates below are separate libraries and are *not* built by
+# default; `Complete` (`lake build Complete`) builds them all.  Never `lake build` those libraries
+# directly on a laptop: this Lake has no jobs limit and a kernel check takes 2–13 GB — use
+# `scripts/kernel_build/build_all.sh`, which throttles by memory.
 [[lean_lib]]
 name = "Thomson"
 leanOptions = { autoImplicit = false }
-globs = ["Thomson", "Thomson.Antiprism", "Thomson.Basic", "Thomson.Cube", "Thomson.Derivative",
-         "Thomson.Enclosure", "Thomson.ForceBalance", "Thomson.Main", "Thomson.Reduction",
-         "Thomson.Separation", "Thomson.Yudin", "Thomson.ThreePoint.+",
-         "Thomson.Unique.+"]
+globs = ["Thomson", "Thomson.Basic.+", "Thomson.Antiprism.+", "Thomson.LP.+", "Thomson.ThreePoint.+",
+         "Thomson.Certificate.+", "Thomson.Numerics.+", "Thomson.Uniqueness.+", "Thomson.Main"]
 
-# Task 5b: proved, but its certificate costs about an hour of `native_decide` spread over 107
-# modules, so it is kept out of `defaultTargets`.  `lake build Tri5b` checks it.
+# The pivot system: `pivotMatrix` invertible and the pivots enclosed to `2·10⁻²¹` (F(i)).
 [[lean_lib]]
-name = "Tri5b"
+name = "Pivots"
 leanOptions = { autoImplicit = false }
 srcDir = "."
-roots = ["Thomson.Tri5b.Task5b"]
+globs = ["Thomson.Pivots.+"]
 
-# Task 1b (and Task 1a, which its estimate proves on the way): also `native_decide`, also kept
-# out of the default build.
-[[lean_lib]]
-name = "Task1b"
-leanOptions = { autoImplicit = false }
-srcDir = "."
-roots = ["Thomson.Task1b.Tasks"]
-
-# Task 4 (the pair inequality): `decide +kernel` only, no `native_decide`.  `lake build Pair`.
-[[lean_lib]]
-name = "Pair"
-leanOptions = { autoImplicit = false }
-srcDir = "."
-globs = ["Thomson.Pair.+"]
-
-# Task 2 (positive semidefiniteness): `decide +kernel` only, no `native_decide`.  `lake build PSD`.
+# Positive semidefiniteness of the certificate's blocks (F(ii)).  `decide +kernel`.
 [[lean_lib]]
 name = "PSD"
 leanOptions = { autoImplicit = false }
 srcDir = "."
 globs = ["Thomson.PSD.+"]
 
-# Task 5a, numeric side (the patch covering and the enclosures): `decide +kernel` only.
+# The pair inequality (F(iii)).  `decide +kernel`.
 [[lean_lib]]
-name = "TriLocalCert"
+name = "Pair"
 leanOptions = { autoImplicit = false }
 srcDir = "."
-globs = ["Thomson.TriLocalCert.+"]
+globs = ["Thomson.Pair.+"]
 
-# The main theorem with Tasks 1a, 1b, 5b discharged (`Thomson.Complete`): builds `Task1b` and
-# `Tri5b`.  `lake build Complete`.
+# The triangle inequality near the five touching types (F(iv-a)): the calculus and the
+# kernel-checked patch coverings.  Imported by `Thomson.Certificate.Assemble`.
+[[lean_lib]]
+name = "TriangleLocal"
+leanOptions = { autoImplicit = false }
+srcDir = "."
+globs = ["Thomson.TriangleLocal.+"]
+
+# The triangle inequality away from the touching types (F(iv-b)): the box covering, some 30
+# CPU-hours of `decide +kernel` in 637 generated modules (`Covering/Part*.lean`).
+[[lean_lib]]
+name = "TriangleGlobal"
+leanOptions = { autoImplicit = false }
+srcDir = "."
+globs = ["Thomson.TriangleGlobal.+"]
+
+# The main theorems with every certificate discharged (`Thomson.Complete`).  No `native_decide`.
 [[lean_lib]]
 name = "Complete"
 leanOptions = { autoImplicit = false }
@@ -65,4 +64,14 @@ roots = ["Thomson.Complete"]
 
 [[lean_lib]]
 name = "Thomson8"
+leanOptions = { autoImplicit = false }
+
+# Comparator (https://github.com/leanprover/comparator): `Challenge` states the theorems with
+# `sorry` and imports only definitions; `Solution` proves them.  `scripts/comparator/run.sh`.
+[[lean_lib]]
+name = "Challenge"
+leanOptions = { autoImplicit = false }
+
+[[lean_lib]]
+name = "Solution"
 leanOptions = { autoImplicit = false }

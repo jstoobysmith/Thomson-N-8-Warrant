@@ -1,5 +1,5 @@
-import Thomson.Pair.Poly
-import Thomson.Tri5b.CertIntervals
+import Thomson.Numerics.Poly
+import Thomson.TriangleGlobal.CertIntervals
 
 /-! # Task 4, step 4: the pair polynomial as a polynomial in `w = 1 − s²/2`
 

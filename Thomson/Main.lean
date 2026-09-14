@@ -1,7 +1,7 @@
 import Mathlib
-import Thomson.ThreePoint.Tasks
-import Thomson.Separation
-import Thomson.Reduction
+import Thomson.Certificate.Assemble
+import Thomson.LP.Separation
+import Thomson.LP.Reduction
 
 namespace Thomson
 open Finset
@@ -29,11 +29,11 @@ theorem thomson_eight_lower_of_cert (C : ThreePointCert) :
 /-! ## 17. The main theorem -/
 
 /-- **The matching lower bound**: no admissible configuration beats the best antiprism.  Proved
-from `exists_threePointCert_of_tasks`, i.e. from the Tasks of `Thomson.ThreePoint.Tasks`.  The three
-hypotheses are the tasks proved with `native_decide` in the separate libraries `Task1b` (1a, 1b) and
-`Tri5b` (5b); `Thomson.Complete` (library `Complete`) discharges them and states
-`thomson_eight_lower` outright.  Task 5a is proved in `Thomson/TriLocalCert/` and is imported by
-`Tasks.lean`, so this theorem is `sorry`-free and free of `native_decide`. -/
+from `exists_threePointCert_of_tasks`, i.e. from the Tasks of `Thomson.Certificate.Assemble`.  The three
+hypotheses are the tasks proved by `decide +kernel` in the separate libraries `Task1b` (1a, 1b)
+and `Tri5b` (5b); `Thomson.Complete` (library `Complete`) discharges them and states
+`thomson_eight_lower` outright.  Task 5a is proved in `Thomson/TriangleLocal/` and is imported by
+`Tasks.lean`, so this theorem is `sorry`-free; nothing in the development uses `native_decide`. -/
 theorem thomson_eight_lower_of_tasks (h1a : Task1a) (h1b : Task1b) (h5b : Task5b) :
     antiprismEnergy uStar ≤ thomsonInf 8 :=
   thomson_eight_lower_of_cert (Classical.choice (exists_threePointCert_of_tasks h1a h1b h5b))

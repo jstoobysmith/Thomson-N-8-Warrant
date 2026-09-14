@@ -6,7 +6,7 @@ import Thomson.Pair.SweepNl
 import Thomson.Pair.SweepNr
 import Thomson.Pair.SweepAl
 import Thomson.Pair.SweepAr
-import Thomson.ThreePoint.Sharp
+import Thomson.Antiprism.SharpChords
 
 /-! # Task 4: the pair inequality
 

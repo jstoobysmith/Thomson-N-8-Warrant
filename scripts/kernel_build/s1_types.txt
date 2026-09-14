@@ -1,0 +1,5 @@
+Thomson.TriangleLocal.Types.Type0
+Thomson.TriangleLocal.Types.Type1
+Thomson.TriangleLocal.Types.Type2
+Thomson.TriangleLocal.Types.Type3
+Thomson.TriangleLocal.Types.Type4

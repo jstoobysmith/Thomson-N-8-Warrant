@@ -1,0 +1,3 @@
+Thomson.TriangleLocal.Glue
+Thomson.TriangleLocal.Final
+Thomson.Certificate.Assemble

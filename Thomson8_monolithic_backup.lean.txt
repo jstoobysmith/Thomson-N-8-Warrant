@@ -1,5 +1,5 @@
 /-
-The N = 8 Thomson problem: formalisation skeleton.  See N8-Thomson-Blueprint.md.
+The N = 8 Thomson problem: formalisation skeleton.  See docs/blueprint.md.
 Compiles against Mathlib (Lean 4.33.0).  The `sorry`s are exactly the six **Tasks** in §16
 (`certData` and `certData_*`): the exact three-point certificate — numerically established
 (blueprint §12) — and its verification, each with a proof sketch, arranged so that Tasks 2–6 are
@@ -1996,7 +1996,7 @@ the *architecture* of that proof:
 * `three_point_bound` — the bound, **proved** here from leaf 1 and Schoenberg at degree 1;
 * `exists_threePointCert` — **proved** from six Tasks (`certData`, `certData_*`), each a `sorry`
   with a proof sketch — the exact certificate (numerically established:
-  `threepoint/certificate_*.json`) and its verification;
+  `scripts/threepoint/certificate_*.json`) and its verification;
 * `thomson_eight_lower` — **proved** from the two leaves, the bound, and §15.
 
 So the open problem is now exactly the six Tasks, and nothing else. -/
@@ -2479,14 +2479,14 @@ structure ThreePointCertData where
 /-! ### The remaining leaf, split into independently fillable tasks
 
 Everything below the line `-- TASKS` is what remains to prove the N = 8 Thomson problem.  The
-numerical certificate is `threepoint/certificate_pd.json` (double precision; re-solved at the
+numerical certificate is `scripts/threepoint/certificate_pd.json` (double precision; re-solved at the
 Lean range `t ≤ 0.5373` as `certificate_r5373.json`) and its 50-digit exactly-tight projection
 `certificate_*_hp.json`; blueprint §12 records everything known about it:
 
 * `f(t) = a₀ + a₁ t` only (`a₀ ≈ 0.9495, a₁ ≈ 0.2796`), `λ ≈ 0.01016`;
 * `F_k = L_kᵀ D_k L_k` for `k = 0,…,5`, block sizes `9,8,7,6,5,4`, each `F_k` of corank exactly
   one: `F_k v_k = 0` for the explicit vectors `v_k(u*)` of
-  `threepoint/kernel_vectors_exact.json` — rational functions of `u*` with rational
+  `scripts/threepoint/kernel_vectors_exact.json` — rational functions of `u*` with rational
   coefficients (no `√2`), e.g. `v₀ = (1, 0, (3u²−2u+1)/2, 0, (35u⁴−60u³+42u²−12u+3)/8, …)`;
 * the pair polynomial has double zeros at the four antiprism distances
   `s ∈ {1.17125, 1.28769, 1.65639, 1.89689}` (i.e. `t ∈ {u*, (1−u*)/√2 − u*, 2u*−1, −(1−u*)/√2 − u*}`),
@@ -2509,9 +2509,9 @@ each other once Task 1 has fixed the data. -/
 -- TASKS ------------------------------------------------------------------------------------
 
 /-- **Task 1 — the data.**  Produce the exact certificate data.  Recipe: start from
-`threepoint/certificate_r5373_hp.json` (50 digits, exactly tight at the antiprism), express every
+`scripts/threepoint/certificate_r5373_hp.json` (50 digits, exactly tight at the antiprism), express every
 entry as an element of `ℚ(√2, u*, r, h, s₂, s₄)` by projecting onto the affine tightness space
-of `threepoint/hp_project.py` in exact arithmetic (the kernel constraints are linear over
+of `scripts/threepoint/hp_project.py` in exact arithmetic (the kernel constraints are linear over
 `ℚ(u*)`; the double-zero and triangle-tightness constraints are linear over the full field), then
 write the result here as explicit real-number expressions in `uStar`, `Real.sqrt 2`,
 `Real.sqrt (1 - uStar)`, `Real.sqrt uStar` and the two cross roots.  Keep the LDLᵀ form so that

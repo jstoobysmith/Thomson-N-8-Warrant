@@ -1,4 +1,4 @@
-import Thomson.Pair.Poly
+import Thomson.Numerics.Poly
 import Thomson.Pair.Taylor
 
 /-! # Task 4, step 3: the sweep from a double zero

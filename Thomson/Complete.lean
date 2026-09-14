@@ -1,22 +1,20 @@
 import Thomson.Main
-import Thomson.Task1b.Tasks
-import Thomson.Tri5b.Task5b
-import Thomson.Unique.Final
+import Thomson.Pivots.Discharge
+import Thomson.TriangleGlobal.Discharge
+import Thomson.Uniqueness.Final
 
 /-! # The main theorem, with every proved Task discharged
 
 The default build (`Thomson.Main`) proves `thomson_eight_lower_of_tasks`, which takes the three
-Tasks proved with `native_decide` — 1a, 1b (library `Task1b`) and 5b (library `Tri5b`) — as
-hypotheses, so that it neither pays for their certificates nor depends on the axioms `native_decide`
-adds.
-This file, the library `Complete` (`lake build Complete`; it builds `Tri5b`, about an hour of CPU),
-discharges them.  Nothing is left open: Task 5a is proved in `Thomson/TriLocalCert/` with
-`decide +kernel`, so `#print axioms Thomson.thomson_eight_lower` lists no `sorryAx`, only
-`propext, Classical.choice, Quot.sound` and one `…._native.native_decide.ax_…` axiom for each of
-the 110 `native_decide` certificates (Task 1b's `check_ok`; Task 5b's `CFtab_eq`, `MItab_eq` and
-the 107 covering parts).
+Tasks whose certificates are expensive — 1a, 1b (library `Task1b`) and 5b (library `Tri5b`) — as
+hypotheses, so that it does not pay for them.
+This file, the library `Complete` (`lake build Complete`; it builds `Tri5b`, about 30 hours of CPU
+in `decide +kernel`, a few hours of wall clock on this machine), discharges them.  Nothing is left
+open and nothing uses `native_decide`: Task 5a is proved in `Thomson/TriangleLocal/` and Tasks 1a,
+1b, 5b in `Thomson/Pivots/`, `Thomson/TriangleGlobal/` with `decide +kernel`, so
+`#print axioms Thomson.thomson_eight_lower` lists only `propext, Classical.choice, Quot.sound`.
 
-Uniqueness (`UniquenessPlan.md`, `Thomson/Unique/`) is stated here too: `thomson_eight_unique` and
+Uniqueness (`docs/uniqueness.md`, `Thomson/Uniqueness/`) is stated here too: `thomson_eight_unique` and
 `thomson_eight_minimiser_iff`. -/
 
 namespace Thomson

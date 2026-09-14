@@ -1,0 +1,3 @@
+Thomson.TriangleGlobal.Covering.Certificate
+Thomson.TriangleGlobal.Final
+Thomson.TriangleGlobal.Discharge

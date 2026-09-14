@@ -1,6 +1,6 @@
 import Mathlib
-import Thomson.ThreePoint.Bound
-import Thomson.Derivative
+import Thomson.ThreePoint.Certificate
+import Thomson.Antiprism.Derivative
 
 namespace Thomson
 open Finset Matrix
@@ -9,7 +9,7 @@ open scoped RealInnerProductSpace
 /-! # Toolkit for the Tasks: data-independent lemmas, all proved
 
 Everything here is independent of the certificate data.  The Tasks in
-`Thomson.ThreePoint.Tasks` are reduced to applying these to explicit objects. -/
+`Thomson.Certificate.Assemble` are reduced to applying these to explicit objects. -/
 
 /-! ### The algebraic constants: `u*`, `√2`, `r = √(1−u*)`, and the two cross chord lengths -/
 

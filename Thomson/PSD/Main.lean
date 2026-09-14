@@ -8,7 +8,7 @@ import Thomson.PSD.Block5
 /-! # Task 2: the blocks of the certificate are positive semidefinite
 
 For each block `k`, `Hp p k = L D Lᵀ + N` with `L`, `D` the (rounded) `LDLᵀ` factors of
-`Hp pivotsNum k − μ_k P` (`Thomson/PSD/Block*.lean`, `threepoint/psd_gen.py`): `D ≥ 0`, and
+`Hp pivotsNum k − μ_k P` (`Thomson/PSD/Block*.lean`, `scripts/threepoint/psd_gen.py`): `D ≥ 0`, and
 `N ≈ μ_k P` is diagonally dominant for every `p` within `10⁻¹²` of `pivotsNum`, with slack
 `≈ 2μ_k = λ_min ∈ [5.9·10⁻⁴, 1.5·10⁻³]` against a perturbation of `10⁻¹²` (`Thomson.PSD.Check`).
 All six checks are `decide +kernel`: no `native_decide`. -/

@@ -1,5 +1,5 @@
 /-
-The N = 8 Thomson problem — Lean 4 formalisation.  See N8-Thomson-Blueprint.md.
+The N = 8 Thomson problem — Lean 4 formalisation.  See docs/blueprint.md.
 
 This is the umbrella module of a standalone Lake project (`lakefile.toml` in this directory;
 `lake exe cache get` once, then `lake build`).  The development is split into modules:
@@ -26,14 +26,15 @@ This is the umbrella module of a standalone Lake project (`lakefile.toml` in thi
   Thomson/ThreePoint/Tasks.lean        THE TASKS: status table; the only `sorry` is Task 5a
   Thomson/Main.lean                    `thomson_eight_lower_of_tasks`, proved from the Tasks
   Thomson/Complete.lean                `thomson_eight_lower` outright (library `Complete`; builds the
-                                       `native_decide` libraries `Task1b` and `Tri5b`)
+                                       kernel-checked libraries `Task1b` and `Tri5b`)
 
 Status: `thomson_eight_lower : antiprismEnergy uStar ≤ thomsonInf 8` (`Thomson/Complete.lean`) is
 proved from `exists_threePointCert_of_tasks`, which is assembled from the Tasks of
 `Thomson/ThreePoint/Tasks.lean`.  All of them are proved except Task 5a (local positivity of the
 triangle polynomial at the five touching types), the one remaining `sorry`.  Tasks 1a, 1b and 5b
-use `native_decide` and live in the separate libraries `Task1b` and `Tri5b`; the default build takes
-them as hypotheses (`thomson_eight_lower_of_tasks`).  The previous
+are checked by `decide +kernel` (no `native_decide`, no `Lean.ofReduceBool`) and live in the
+separate libraries `Task1b` and `Tri5b`, because their certificates take hours of CPU; the default
+build takes them as hypotheses (`thomson_eight_lower_of_tasks`).  The previous
 monolithic file is kept as `Thomson8_monolithic_backup.lean.txt`.
 -/
 
