@@ -21,3 +21,11 @@ On macOS the sandbox `landrun` is not available; `run.sh` uses the comparator's
 `fake-landrun.sh`, which is fine when — as here — the solution is not adversarial: the statement
 comparison and the axiom check are what the certificate of this repository rests on.  On Linux,
 follow the comparator README's `systemd-run … landrun` invocation instead.
+
+## Measured run (2026-09-14/15)
+
+`run.sh` on this project, after a full build: **"Your solution is okay!"**, exit code 0, in
+81 759 s wall (22.7 h; 80 636 s CPU, single-threaded), peak resident memory 47.3 GB on a 64 GB
+machine.  The comparator replays every declaration the four theorems depend on through its own
+kernel, including all the `decide +kernel` certificates, which is where the time and the memory
+go; keep other memory users off the machine while it runs.
