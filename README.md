@@ -1,9 +1,14 @@
 # A warrant for the `N = 8` Thomson problem, in Lean 4
+Found by **Joseph Tooby-Smith** and **Alex Zughaid**.
+
+This folder takes a very long time to build. 
+
+Everything below and in this folder has been generated with an AI. 
+
 
 This repository is a **warrant** for the Thomson problem at `n = 8`: it confirms that eight unit
 charges minimise their Coulomb energy exactly at the **square antiprism** with the optimal twist,
-uniquely up to isometry — the configuration long known numerically.  The warrant was found by
-**Joseph Tooby-Smith** and **Alex Zughaid**.
+uniquely up to isometry — the configuration long known numerically.  The warrant was 
 
 `Thomson.thomson_eight : thomsonInf 8 = antiprismEnergy uStar` and
 `Thomson.thomson_eight_unique` (`Thomson/Complete.lean`) are the statements.

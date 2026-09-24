@@ -2,3 +2,4 @@
 __pycache__/
 scripts/kernel_build/logs/
 .DS_Store
+.claude
