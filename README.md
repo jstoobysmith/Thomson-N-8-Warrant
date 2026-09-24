@@ -1,41 +1,9 @@
 # A warrant for the `N = 8` Thomson problem, in Lean 4
 Found by **Joseph Tooby-Smith** and **Alex Zughaid**.
 
-This folder takes a very long time to build. 
+In this repository, we provide a formal check that the n = 8 case of the Thompson problem is solved uniquely by the square antiprism of a set height. It was found using Claude Fable 5.1 and Opus 5 with a Claude Max subscription. The human prompting involved was minimal and only related to technicalities in Lean, rather than any of the related mathematics. 
 
-Everything below and in this folder has been generated with an AI. 
+We do not call this a proof, but instead a warrant, to distinguish it from the meaning of a proof in the traditional sense (which is a human-written, human-readable, convincing argument that something is true). This is certainly not that. See [here](https://josephtoobysmith.com/math/2026/09/18/Warrants-dinosaur-bones-AI.html).
 
+We have made this code public in the interest of open science; however, we have not yet publicized its existence, as we think it is only right to do so once we have digested the proof fully. We do not think any credit should be given for the work that is written in this file. Whilst this warrant is complete, we consider everything here to still be very much a work in progress. 
 
-This repository is a **warrant** for the Thomson problem at `n = 8`: it confirms that eight unit
-charges minimise their Coulomb energy exactly at the **square antiprism** with the optimal twist,
-uniquely up to isometry — the configuration long known numerically.  The warrant was 
-
-`Thomson.thomson_eight : thomsonInf 8 = antiprismEnergy uStar` and
-`Thomson.thomson_eight_unique` (`Thomson/Complete.lean`) are the statements.
-Axioms: `propext`, `Classical.choice`, `Quot.sound` only — no `sorry`, no `native_decide`
-(`test/Axioms.lean`).
-
-## Warrant, not proof
-
-We use "warrant" in the sense set out in [Dinosaurs, warrants and finding AI resolutions to
-conjectures](https://josephtoobysmith.com/math/2026/09/18/Warrants-dinosaur-bones-AI.html): a
-machine-checked object that licenses belief in a result without supplying human understanding of
-it, as distinct from a proof, which is a human-written and human-readable argument that convinces
-a human.  A warrant can afterwards be *digested* into a proof.
-
-**A digest of this warrant is in progress** and is not part of this repository.
-
-## Layout
-
-* `organisation.md` — the layout of the proof and the conventions; each directory of `Thomson/`
-  has a `README.md` naming its literature source.
-* `docs/blueprint.md`, `docs/uniqueness.md` — the mathematics; `docs/history/` — the task plans.
-* `scripts/threepoint/` — the certificate design and every generator of a GENERATED file;
-  `scripts/kernel_build/` — how to build the expensive kernel-checked libraries without
-  exhausting memory (`build_all.sh`).
-
-## Build
-
-`lake exe cache get`, `lake build` (the default library, minutes), then
-`scripts/kernel_build/build_all.sh` for `Pivots`, `TriangleLocal`, `TriangleGlobal` and `Complete`
-(about seven hours on a 14-core, 64 GB machine).  Do not `lake build TriangleGlobal` directly.
