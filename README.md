@@ -9,6 +9,9 @@ We have made this code public in the interest of open science; however, we have 
 
 See [here](https://leanprover.zulipchat.com/#narrow/channel/113488-general/topic/Proving.20an.20open.20conjecture.20with.20AI.20.2B.20Lean/with/625173451) for a discussion on proven open conjectures with AI and Lean and what to do with such results.
 
+
+We believe that the N = 7 case was followed trivially from similar techniques. 
+
 ## Key references
 
 Below is a list of AI-generated references that are believed to be used in the development of this warrant. Unfortunately, at this stage, we cannot assume that this list of references is 100% inclusive. 
