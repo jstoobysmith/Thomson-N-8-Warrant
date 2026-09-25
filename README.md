@@ -1,7 +1,7 @@
 # A warrant for the `N = 8` Thomson problem, in Lean 4
 Found by **Joseph Tooby-Smith** and **Alex Zughaid**.
 
-**Edit (25/09/26):** This paper was posted on https://arxiv.org/pdf/2609.22077 before we made this code public, but after Claude had produced a full solution. 
+**Edit (25/09/26):** The following paper was posted on arXiv https://arxiv.org/pdf/2609.22077 before we made this code public, but after Claude had produced a full solution. 
 
 In this repository, we provide a formal check that the n = 8 case of the Thompson problem is solved uniquely by the square antiprism of a set height. It was found using Claude Fable 5.1 and Opus 5 with a Claude Max subscription. The human prompting involved was minimal and only related to technicalities in Lean, rather than any of the related mathematics. 
 
