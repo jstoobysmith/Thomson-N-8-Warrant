@@ -18,7 +18,7 @@ We believe that the N = 7 case was followed trivially from similar techniques.
 
 ## Overview
 
-For a brief overview of the ideas behind the warrant, see [`docs/overview/main.pdf`](docs/overview/main.pdf) (LaTeX source: [`docs/overview/main.tex`](docs/overview/main.tex)).
+For a brief overview of the ideas behind the warrant, see [`docs/overview/main.pdf`](docs/overview/main.pdf).
 
 ## Key references
 
