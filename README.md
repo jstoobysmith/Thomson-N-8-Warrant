@@ -16,6 +16,10 @@ See [here](https://leanprover.zulipchat.com/#narrow/channel/113488-general/topic
 
 We believe that the N = 7 case was followed trivially from similar techniques. 
 
+## Overview
+
+For a brief overview of the ideas behind the warrant, see [`docs/overview/main.pdf`](docs/overview/main.pdf) (LaTeX source: [`docs/overview/main.tex`](docs/overview/main.tex)).
+
 ## Key references
 
 Below is a list of AI-generated references that are believed to be used in the development of this warrant. Unfortunately, at this stage, we cannot assume that this list of references is 100% inclusive. 

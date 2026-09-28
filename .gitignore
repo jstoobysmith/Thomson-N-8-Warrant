@@ -2,4 +2,9 @@
 __pycache__/
 scripts/kernel_build/logs/
 .DS_Store
-.claude
+.claude*.aux
+*.log
+*.out
+*.synctex.gz
+*.fdb_latexmk
+*.fls
